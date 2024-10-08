@@ -1,8 +1,22 @@
 import sys
 import os
+
+import subprocess
+
+def install_package(package_name):
+    try:
+        __import__(package_name)
+        print(f"'{package_name}' is already installed.")
+    except ModuleNotFoundError:
+        print(f"'{package_name}' not found. Installing...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+# Exemple d'utilisation avec 'pickle'
+for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess"]:
+    install_package(package_name)
+
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt
-import subprocess
 import shutil
 import pathlib
 

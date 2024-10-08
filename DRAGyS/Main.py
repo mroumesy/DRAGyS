@@ -17,7 +17,6 @@ from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationTo
 from matplotlib import colors
 
 from astropy.io import fits
-
 import Tools as Tools
 import SPF_Window as SPF
 from   Filter_Pixel import FilteringWindow

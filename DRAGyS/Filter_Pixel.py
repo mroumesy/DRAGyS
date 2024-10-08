@@ -9,8 +9,7 @@ from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.patches import Rectangle
 from scipy import ndimage, signal
-from GUI              import Tools
-import cv2
+import Tools
 
 
 

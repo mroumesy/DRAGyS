@@ -3,7 +3,7 @@ import sys
 import os
 import matplotlib.pyplot as plt
 sys.path.append("C:\\Users\mroum\OneDrive\Bureau\PhD")
-from GUI              import Tools
+import Tools
 import numpy as np
 from scipy.interpolate import griddata
 from multiprocessing import Pool
