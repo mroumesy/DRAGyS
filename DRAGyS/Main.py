@@ -6,8 +6,6 @@ print(current_folder)
 sys.path.append(current_folder)
 import numpy as np
 import time
-import pickle as pkl
-from scipy.interpolate import griddata
 from PyQt5.QtWidgets import QTextEdit, QApplication, QWidget, QSlider, QCheckBox, QSpinBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QFrame, QProgressBar
 from PyQt5.QtCore import Qt
 

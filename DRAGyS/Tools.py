@@ -126,6 +126,7 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi, liste=None):
     x = x0 - ap * np.cos(t) * np.cos(phi) - bp * np.sin(t) * np.sin(phi)
     y = y0 + ap * np.cos(t) * np.sin(phi) - bp * np.sin(t) * np.cos(phi)
 
+
     return x, y
 
 def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, method='Azimuthal'):

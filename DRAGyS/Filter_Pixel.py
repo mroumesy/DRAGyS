@@ -8,7 +8,7 @@ from PyQt5.QtWidgets   import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QS
 from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.patches import Rectangle
-from scipy import ndimage, signal
+from scipy import ndimage
 import Tools
 
 
