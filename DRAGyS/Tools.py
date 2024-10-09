@@ -277,24 +277,6 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
                 max_Y.append(len(image)/2 + (Mincut_Radius + (np.max(range_pixel)))*np.cos(phi))
     return X, Y, min_X, max_X, min_Y, max_Y
 
-def generate_pert_random(a, b, m, size=1):
-    if a >= m or b <= m :
-        return m    
-    else:
-        alpha = 1 + 4 * (m - a) / (b - a)
-        beta_param = 1 + 4 * (b - m) / (b - a)
-        res = a + (b - a) * beta.rvs(alpha, beta_param, size=size)
-        return res[0]
-
-def Triangul(a, b, m, size=1):
-    values = []
-    if a > b and a != m and b != m:
-        b, a = a, b
-    if a == m or b == m :
-        return m    
-    else:
-        return np.random.triangular(a, m, b)
-
 def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb, filename, Tsigma=1):
     ## Compute Values of Inclination, Position angle, and Scale Height
     coeffs = fit_ellipse(np.array(X), np.array(Y))
@@ -351,17 +333,6 @@ def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb, filename, Tsigma=
     GUI_Folder, Fitting_Folder, SPF_Folder = Init_Folders()
     with open(f"{Fitting_Folder}/{filename}", 'wb') as fichier:
         pickle.dump(Data_to_Save, fichier)
-
-def ellipse_mask(x_center, y_center, width, height, angle, shape):
-    y, x = np.ogrid[:shape[0], :shape[1]]
-    cos_angle = np.cos(angle)
-    sin_angle = np.sin(angle)
-    x_ = x - x_center
-    y_ = y - y_center
-    ellipse_eq = ((x_ * cos_angle + y_ * sin_angle) ** 2 / (width / 2) ** 2 +
-                  (x_ * sin_angle - y_ * cos_angle) ** 2 / (height / 2) ** 2)
-    mask = ellipse_eq <= 1
-    return mask
     
 def BeamSpace(Radius, r_beam, PA, incl, aspect, alpha):
     Beam_X, Beam_Y, Beam_Phi= [], [], []
@@ -389,22 +360,6 @@ def create_circular_mask(Y, X, center, radius):
     dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
     mask = dist_from_center < radius
     return mask
-
-def Elliptic_Mask(R_in, R_out, PA, incl, aspect, alpha, shape):
-    
-    Phi = np.radians(np.linspace(0, 359, 360))
-    x_rot_in = R_in * np.sin(Phi) * np.cos(np.pi - PA) - (aspect * R_in**alpha * np.sin(incl) - R_in * np.cos(Phi) * np.cos(incl)) * np.sin(np.pi - PA) + shape[0]/2
-    y_rot_in = R_in * np.sin(Phi) * np.sin(np.pi - PA) + (aspect * R_in**alpha * np.sin(incl) - R_in * np.cos(Phi) * np.cos(incl)) * np.cos(np.pi - PA) + shape[0]/2
-    x_rot_out = (R_out * np.sin(Phi)) * np.cos(np.pi - PA) - (aspect * R_out**alpha * np.sin(incl) - R_out * np.cos(Phi) * np.cos(incl)) * np.sin(np.pi - PA) + shape[0]/2
-    y_rot_out = (R_out * np.sin(Phi)) * np.sin(np.pi - PA) + (aspect * R_out**alpha * np.sin(incl) - R_out * np.cos(Phi) * np.cos(incl)) * np.cos(np.pi - PA) + shape[0]/2
-
-    x_c_in,  y_c_in  = np.mean(x_rot_in),  np.mean(y_rot_in)
-    x_c_out, y_c_out = np.mean(x_rot_out), np.mean(y_rot_out)
-    a_in,  b_in  = R_in,  R_in * np.cos(incl)
-    a_out, b_out = R_out, R_out * np.cos(incl)
-    mask2 = ellipse_mask(y_c_in,  x_c_in,  2 * a_in,  2 * b_in,  PA - np.pi/2, shape)
-    mask1 = ellipse_mask(y_c_out, x_c_out, 2 * a_out, 2 * b_out, PA - np.pi/2, shape)
-    return mask1 & ~mask2
 
 def My_PositionAngle(xcenter, ycenter, x0, y0, a, b, e, PA_LSFE):
     Xa, Ya = get_ellipse_pts((x0, y0, a, b, e, PA_LSFE+np.pi/2), liste=[np.pi/2, 3*np.pi/2])
@@ -568,88 +523,6 @@ def MCFOST_PhaseFunction(file_path, Name, Normalization):
 
     return MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, MCFOST_Err_I, MCFOST_Err_PI, MCFOST_Err_DoP
 
-# def BHMIE_PhF(filepath, Grain_file, obs_wl=1.6, Norm=True):
-#     from Bhmie import Fbhmie
-#     print('Compute Phase Function with Bhmie code for "' +Grain_file+ '" Grain type...')
-#     refrel = Interpolation_Bhmie(os.getcwd()+"/Bhmie/utils/Dust/" +Grain_file, obs_wl)
-#     Scatt  = np.linspace(0, 180, 181)
-#     a_gr   = (fits.getdata(filepath+'/data_disk/grain_sizes.fits.gz'))#[:50]
-#     p      = 3.5
-#     if 'HD163296' in filepath:
-#         a_gr = a_gr
-#     else : 
-#         a_gr = a_gr[:50]
-#     int_S11, int_S12 = 0, 0
-#     for a in a_gr:
-#         x = 2*np.pi/obs_wl*a
-#         S1, S2, _, _, _, _ = Fbhmie.bhmie(x, refrel, 91)
-#         int_S11 += ( 0.5 * ( np.abs(S2)**2 + np.abs(S1)**2 ))*a**(1-p)
-#         int_S12 += ( 0.5 * ( np.abs(S2)**2 - np.abs(S1)**2 ))*a**(1-p)  
-#     denom = (np.max(a_gr)**(1-p) - np.min(a_gr)**(1-p))/(1-p)
-#     I  = np.array(int_S11/denom)
-#     PI = np.array(int_S12/denom)
-#     Err_I    = np.zeros(len(I))
-#     Err_PI   = np.zeros(len(PI))
-#     if Norm:
-#         I, PI, Err_I, Err_PI = Normalize(Scatt, I, PI, Err_I, Err_PI, Type='90')
-#     return Scatt, I, PI, Err_I, Err_PI
-# 
-# def Plot_RefractiveIndex(Refrels, Names):
-#     Dust_Folder = "C://Users/mroum/OneDrive/Bureau/PhD/Bhmie/utils/Dust"
-#     obs_wl      = 1.6
-#     for dust in os.listdir(Dust_Folder):
-#         Refract = Interpolation_Bhmie(Dust_Folder + '/' + dust, obs_wl, Plot_Interpolation=False, Log_distrib=False)
-#         Re_ref = np.real(Refract)
-#         Im_ref = np.imag(Refract)
-#         if dust in ['Drain_Si_sUV.dat', 'nk2_amC_Zubko_BE.dat', 'Graphite_para.dat', 'Graphite_perp.dat', 'ice_opct.dat']:
-#             name = ['Silicate', 'AmCarbon', 'Graph_para', 'Graphite_perp', 'ice']
-#             plt.scatter(Re_ref, np.log(Im_ref), c='b')
-#             plt.annotate(name[np.where(dust == os.listdir(Dust_Folder))], (Re_ref, np.log(Im_ref)))          
-#         plt.scatter(Re_ref, np.log(Im_ref), c='k')
-#     # plt.yscale("log")
-#     for idx, refrel in enumerate(Refrels):
-#         plt.scatter(np.real(refrel), np.log(np.imag(refrel)), c='r', marker='s', label=Names[idx])
-#     plt.xlabel('n')
-#     plt.ylabel('log(k)')
-#     plt.show()
-# 
-# def Interpolation_Bhmie(dust_path, obs_wl, Plot_Interpolation=False, Log_distrib=False):
-#     file = open(dust_path, 'r')
-#     lignes = file.readlines()
-#     wl, Re_idx, Im_idx = [], [], []
-#     for lign in lignes:
-#         if lign[0][0] != '#' and len(lign.split()) == 3 :
-#             values = lign.split()
-#             wl.append(float(values[0]))
-#             Re_idx.append(float(values[1]))
-#             Im_idx.append(float(values[2]))
-#     if wl[0] > wl[1]:
-#         Re_idx = Re_idx[::-1]
-#         Im_idx = Im_idx[::-1]
-#         wl     = wl[::-1]
-#     Re_ref = splev(obs_wl, splrep(wl, Re_idx))
-#     Im_ref = splev(obs_wl, splrep(wl, Im_idx))
-#     if Log_distrib:
-#         Re_min = np.interp(obs_wl-0.1, wl, Re_idx)
-#         Re_max = np.interp(obs_wl+0.1, wl, Re_idx)
-#         Im_min = np.interp(obs_wl-0.1, wl, Im_idx)
-#         Im_max = np.interp(obs_wl+0.1, wl, Im_idx)
-#         wl_l = np.linspace(obs_wl-1, obs_wl+1, 50)
-#         Re = 10**np.linspace(np.log10(Re_min), np.log10(Re_max), 50)
-#         Im = 10**np.linspace(np.log10(Im_min), np.log10(Im_max), 50)
-#         Re_ref = np.interp(obs_wl, wl_l, Re)
-#         Im_ref = np.interp(obs_wl, wl_l, Im)
-#     if Plot_Interpolation:
-#         plt.figure("Interpolation of Bhmie Refraction Index")
-#         plt.suptitle("Real and Imaginary part of refraction index", fontsize=18, fontweight='bold')
-#         plt.title('interpolate values : Re_{index} = ' + str(Re_ref) + ' ; Im_{index} = ' + str(Im_ref), fontsize=15)
-#         plt.semilogx(wl, Re_idx, color='green', label='real part')
-#         plt.semilogx(wl, Im_idx, color='blue', label='imaginary part')
-#         plt.scatter([obs_wl, obs_wl], [Re_ref, Im_ref], color='red', marker='x', label='Iterpolation values')
-#         plt.xlabel('wavelengths [$\mu m$]', fontsize=15)
-#         plt.legend()
-#     return Re_ref + Im_ref*1j
-
 def NewScatt(R, ellipse_center, star=(0, 0)):
     Phi    = np.radians(np.linspace(0, 359, 360))
     xs, ys = star
@@ -733,6 +606,17 @@ def Get_PhF(filename, side='All'):
     LB        = np.array(Loaded_Data[side]["LB"])
     Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
     return Scatt, I, PI, Err_Scatt, Err_I, Err_PI, LB, Err_LB
+
+def Get_SPF(filename, side='All'):          # Not Used Yet
+    with open(filename, 'rb') as fichier:
+        Loaded_Data = pickle.load(fichier)
+    Scatt     = np.array(Loaded_Data[side]["Scatt"])
+    SPF       = np.array(Loaded_Data[side]["SPF"])
+    Err_Scatt = np.array(Loaded_Data[side]["Err_Scatt"])
+    Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
+    LB        = np.array(Loaded_Data[side]["LB"])
+    Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
+    return Scatt, SPF, LB, Err_Scatt, Err_SPF, Err_LB
 
 def Remove_LB(Scatt, Flux, Err_Flux, incl, aspect, chi):
     LB_effect = (np.cos(aspect) * np.sin(aspect*chi-aspect)) / (np.cos(aspect)*np.sin(aspect*chi-aspect) + np.cos(incl)*np.cos(aspect*chi-aspect) - np.sin(aspect*chi)*np.cos(np.radians(Scatt)))

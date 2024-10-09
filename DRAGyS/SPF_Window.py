@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 sys.path.append("C:\\Users\mroum\OneDrive\Bureau\PhD")
-import Tools
+import DRAGyS.Tools as Tools
 import numpy as np
 from multiprocessing import Pool
 import pickle as pkl
@@ -154,7 +154,6 @@ def New_pSPF(params):
     Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
     return Dataset
 
-
 def New_pSPF_OneData(params):
     [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl, D_R_ref, D_H_ref, D_aspect, R_in, R_out, n_bin, Type] = params
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
@@ -188,6 +187,7 @@ def New_pSPF_OneData(params):
             x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
             y_rot = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
             if (int(x_rot), int(y_rot)) not in already_used_pixels:
+                # sca = np.arccos(np.cos(0.1934) * np.cos(phi) * np.sin(np.radians(70)) + np.sin(0.1934) *np.cos(np.radians(70)))
                 sca = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
                 if Side[int(x_rot), int(y_rot)] == 1:
                     Angle_east.append(np.degrees(sca))
@@ -235,7 +235,7 @@ def New_pSPF_OneData(params):
             D_SPF_west.append(np.nanstd(Flux_west[mask_west])/len(Flux_west[mask_west]))
     if alpha == 1:
         chi = 1.00001
-        print('$\chi$ is modified to 1.00001')
+        # print('$\chi$ is modified to 1.00001')
     else :
         chi = alpha
     N = np.cos(aspect) * np.sin(chi*aspect - aspect)
