@@ -11,7 +11,7 @@ def install_package(package_name):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
 # Exemple d'utilisation avec 'pickle'
-for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess"]:
+for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess", "opencv-python"]:
     install_package(package_name)
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox
@@ -36,5 +36,5 @@ with open(path_file, "w") as f:
     f.write(Fitting_Folder)
     f.write("___separation___")
     f.write(SPF_Folder)
-for python_file in ["Main.py", "SPF_Window.py", "Filter_Pixel.py", "Tools.py"]:
+for python_file in ["Main.py", "SPF_Window.py", "Filter_Pixel.py", "Tools.py", "Setup.py"]:
     shutil.move(f"{current_folder}/{python_file}", GUI_Folder)
