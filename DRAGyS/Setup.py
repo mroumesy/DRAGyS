@@ -10,7 +10,6 @@ def install_package(package_name):
         print(f"'{package_name}' not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
-# Exemple d'utilisation avec 'pickle'
 for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess"]:
     install_package(package_name)
 
