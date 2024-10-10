@@ -11,7 +11,7 @@ def install_package(package_name):
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
 # Exemple d'utilisation avec 'pickle'
-for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess", "opencv-python"]:
+for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess"]:
     install_package(package_name)
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox
