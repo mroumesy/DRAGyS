@@ -1,16 +1,10 @@
 import sys
 import os
 sys.path.append(os.getcwd())
-import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
-import math
-from scipy.interpolate import splrep, splev, griddata
 from scipy import ndimage, signal
-from scipy.stats import beta
-import random
 import pickle
-import cv2
 import pathlib
 
 
@@ -136,9 +130,6 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
     min_Y = []
     max_Y = []
     image = ndimage.gaussian_filter(image , sigma = gaussian_filter)
-    blur_size = HighPass
-    blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
-    image = cv2.subtract(image, blurred)
 
     if method == 'Diagonal':
         w = 0
@@ -470,20 +461,19 @@ def MaxPixel_range(x, y, peak, Noise, max=10):
 # =================================== Normalization =====================================
 # =======================================================================================
 
-def Same90(ref, Scatt1, phF1, Scatt2, phF2):
-    phF1_90 = splev(ref, splrep(Scatt1, phF1))
-    phF2_90 = splev(ref, splrep(Scatt2, phF2))
-
-    Same_Amp_phF2 = phF2 * phF1_90/phF2_90
-    return Same_Amp_phF2
+def Same90(ref, Sca1, SPF1, Sca2, SPF2):
+    SPF1_90 = np.interp(ref, Sca1, SPF1)
+    SPF2_90 = np.interp(ref, Sca2, SPF2)
+    Same_Amp_SPF2 = SPF2 * SPF1_90/SPF2_90
+    return Same_Amp_SPF2
 
 def Normalize(Scatt, I, PI, Err_I, Err_PI, Type='Norm'):
     if Type=='Norm':
         Norm_I        = np.max(I)
         Norm_PI       = np.max(PI)
     elif Type=='90':
-        Norm_I        = splev(90, splrep(Scatt, I))
-        Norm_PI       = splev(90, splrep(Scatt, PI))
+        Norm_I        = np.interp(90, Scatt, I)
+        Norm_PI       = np.interp(90, Scatt, PI)
     I, PI         = I/Norm_I, PI/Norm_PI
     Err_I, Err_PI = Err_I/Norm_I, Err_PI/Norm_PI
     return I, PI, np.abs(Err_I), np.abs(Err_PI)
