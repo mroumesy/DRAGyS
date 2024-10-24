@@ -4,11 +4,12 @@ sys.path.append(os.getcwd())
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
-from PyQt5.QtWidgets   import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QSlider, QLabel
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets   import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QProgressBar
+from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.patches import Rectangle
 from scipy import ndimage
+import pickle as pkl
 import Tools
 
 
@@ -16,47 +17,16 @@ import Tools
 class FilteringWindow(QDialog):
     def __init__(self, disk_name, image, threshold, x_min, x_max, parent=None):
         super(FilteringWindow, self).__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
-        self.resize(1500, 900)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
+        self.resize(1000, 600)
         # self.setFixedSize(1500, 900)
+        self.nb_steps = 10000
         self.disk_name = disk_name
         self.image = image
         self.Lim_Radius = int(len(image)/2 - 1)
         self.threshold = threshold
         self.x_min, self.x_max = x_min, x_max
         self.R_max = int(x_max - len(self.image)/2)
-        w    = 10
-        L    = int(x_max) - 1
-        size     = 4 * w * (L - w)
-        # size     = 2*L*w
-        # smoothed_image = signal.wiener(image, mysize=(10, 10))
-        # residuals      = np.abs(image - smoothed_image)
-        # self.Noise       = np.nanmean(residuals)
-        # self.Noise = (np.sum(image[0:w, 0:L]) + np.sum(image[L-w:L, 0:L]))/size
-
-        left   = list(self.image[int(x_min) : w  , int(x_min) : L].ravel())
-        right  = list(self.image[L-w   : L  , int(x_min) : L].ravel())
-        top    = list(self.image[w     : L-w, int(x_min) : w].ravel())
-        bottom = list(self.image[w     : L-w, L-w   : L].ravel())
-
-        frame = left + right + top + bottom
-
-
-        # vertical_frame = np.concatenate([top, bottom], axis=0)
-        # horizontal_frame = np.concatenate([left, right], axis=0)
-        # print(np.shape(vertical_frame))
-        # print(np.shape(horizontal_frame))
-        # frame = np.concatenate([vertical_frame, horizontal_frame], axis=1)
-        # frame = np.concatenate([top, bottom, left, right], axis=0)
-        # print(np.nanmean(frame))
-        # print(np.nanstd(frame))
-        self.Noise = np.nanstd(frame)
-
-        # self.Noise = (np.sum(image[0:w, 0:L]) + np.sum(image[L-w:L, 0:L]) + np.sum(image[w:L-w, 0:w]) + np.sum(image[w:L-w,L-w: L]))/size
-        # print(self.Noise)
-        # self.Noise = (np.sum(image[int(x_min) : int(x_min) + width, :]) + np.sum(image[int(x_max)-width : int(x_max), :]) + np.sum(image[:, int(x_min) : int(x_min) + width]) + np.sum(image[:, int(x_max)-width : int(x_max)]))/size
-        # self.SNR = Tools.Compute_SNR(self.image)
-
         self.initUI()
 
     def initUI(self):
@@ -69,6 +39,8 @@ class FilteringWindow(QDialog):
 
         close_button = QPushButton('Save Data - Close', self)
         close_button.clicked.connect(self.Continue)
+        close_button.setFixedHeight(40)
+        close_button.setFixedWidth(300)
         
         self.Filtering_Canvas.mpl_connect('button_press_event', self.on_press)
         self.Filtering_Canvas.mpl_connect('motion_notify_event', self.on_motion)
@@ -76,109 +48,105 @@ class FilteringWindow(QDialog):
 
         # Ajoutez un slider pour le zoom
         self.Gaussian_Label  = QLabel("Gaussian Filter Parameter : ", self)
-        self.Gaussian_slider = QSlider(Qt.Horizontal)
+        self.Gaussian_slider = QSlider(Qt.Orientation.Horizontal)
         self.Gaussian_slider.setMinimum(1)
         self.Gaussian_slider.setMaximum(1000)
         self.Gaussian_slider.setValue(1)
         self.gaussian_value = 0.01
         self.Gaussian_value_Label = QLabel(str(self.gaussian_value))
         self.Gaussian_slider.setSingleStep(1)
-        self.Gaussian_slider.setTickPosition(QSlider.NoTicks)
+        self.Gaussian_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.Gaussian_Label.setFixedWidth(200)
         self.Gaussian_value_Label.setFixedWidth(100)
         self.Gaussian_slider.setFixedWidth(300)
 
         self.Smooth_Label  = QLabel("Smooth Profile Parameter : ", self)
-        self.Smooth_slider = QSlider(Qt.Horizontal)
+        self.Smooth_slider = QSlider(Qt.Orientation.Horizontal)
         self.Smooth_slider.setMinimum(1)
         self.Smooth_slider.setMaximum(10)
         self.Smooth_slider.setValue(1)
         self.smooth_value = 1
         self.Smooth_value_Label = QLabel(str(self.smooth_value))
         self.Smooth_slider.setSingleStep(1)
-        self.Smooth_slider.setTickPosition(QSlider.NoTicks)
+        self.Smooth_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.Smooth_Label.setFixedWidth(200)
         self.Smooth_value_Label.setFixedWidth(100)
         self.Smooth_slider.setFixedWidth(300)
 
         self.Distance_Label  = QLabel("Distance Peaks Parameter : ", self)
-        self.Distance_slider = QSlider(Qt.Horizontal)
+        self.Distance_slider = QSlider(Qt.Orientation.Horizontal)
         self.Distance_slider.setMinimum(100)
         self.Distance_slider.setMaximum(10000)
         self.Distance_slider.setValue(100)
         self.Distance_value = 1
         self.Distance_value_Label = QLabel(str(self.Distance_value))
         self.Distance_slider.setSingleStep(1)
-        self.Distance_slider.setTickPosition(QSlider.NoTicks)
+        self.Distance_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.Distance_Label.setFixedWidth(200)
         self.Distance_value_Label.setFixedWidth(100)
         self.Distance_slider.setFixedWidth(300)
 
         self.Prominence_Label  = QLabel("Prominence Peaks Parameter : ", self)
-        self.Prominence_slider = QSlider(Qt.Horizontal)
+        self.Prominence_slider = QSlider(Qt.Orientation.Horizontal)
         self.Prominence_slider.setMinimum(-500)
         self.Prominence_slider.setMaximum(500)
-        self.Prominence_slider.setValue(-500)
-        self.Prominence_value = 10**(-5)
+        self.Prominence_slider.setValue(0)
+        self.Prominence_value = 10**(0/100)
         self.Prominence_value_Label = QLabel(str(self.Prominence_value))
         self.Prominence_slider.setSingleStep(1)
-        self.Prominence_slider.setTickPosition(QSlider.NoTicks)
+        self.Prominence_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.Prominence_Label.setFixedWidth(200)
         self.Prominence_value_Label.setFixedWidth(100)
         self.Prominence_slider.setFixedWidth(300)
 
         self.Width_Label  = QLabel("Width Peaks Parameter : ", self)
-        self.Width_slider = QSlider(Qt.Horizontal)
+        self.Width_slider = QSlider(Qt.Orientation.Horizontal)
         self.Width_slider.setMinimum(1)
         self.Width_slider.setMaximum(10000)
         self.Width_slider.setValue(100)
         self.Width_value = 0.1
         self.Width_value_Label = QLabel(str(self.Width_value))
         self.Width_slider.setSingleStep(1)
-        self.Width_slider.setTickPosition(QSlider.NoTicks)
+        self.Width_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.Width_Label.setFixedWidth(200)
         self.Width_value_Label.setFixedWidth(100)
         self.Width_slider.setFixedWidth(300)
 
         self.HighPass_Label  = QLabel("High Pass Parameter : ", self)
-        self.HighPass_slider = QSlider(Qt.Horizontal)
+        self.HighPass_slider = QSlider(Qt.Orientation.Horizontal)
         self.HighPass_slider.setMinimum(10)
         self.HighPass_slider.setMaximum(1000)
         self.HighPass_slider.setValue(10)
         self.HighPass_value = 21
         self.HighPass_value_Label = QLabel(str(self.HighPass_value))
         self.HighPass_slider.setSingleStep(1)
-        self.HighPass_slider.setTickPosition(QSlider.NoTicks)
+        self.HighPass_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.HighPass_Label.setFixedWidth(200)
         self.HighPass_value_Label.setFixedWidth(100)
         self.HighPass_slider.setFixedWidth(300)
 
         self.MinCutRad_Label  = QLabel("Min Radius Cut : ", self)
-        self.MinCutRad_slider = QSlider(Qt.Horizontal)
+        self.MinCutRad_slider = QSlider(Qt.Orientation.Horizontal)
         self.MinCutRad_slider.setMinimum(1)
         self.MinCutRad_slider.setMaximum(self.Lim_Radius - 1)
         self.MinCutRad_slider.setValue(2)
         self.MinCutRad_value = 2
-        # self.MinCutRad_slider.setValue(int(self.Lim_Radius/2 - 1))
-        # self.MinCutRad_value = int(self.Lim_Radius/2 - 1)
         self.MinCutRad_value_Label = QLabel(str(self.MinCutRad_value))
         self.MinCutRad_slider.setSingleStep(1)
-        self.MinCutRad_slider.setTickPosition(QSlider.NoTicks)
+        self.MinCutRad_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.MinCutRad_Label.setFixedWidth(200)
         self.MinCutRad_value_Label.setFixedWidth(100)
         self.MinCutRad_slider.setFixedWidth(300)
 
         self.MaxCutRad_Label  = QLabel("Max Radius Cut : ", self)
-        self.MaxCutRad_slider = QSlider(Qt.Horizontal)
+        self.MaxCutRad_slider = QSlider(Qt.Orientation.Horizontal)
         self.MaxCutRad_slider.setMinimum(1)
         self.MaxCutRad_slider.setMaximum(self.Lim_Radius)
-        self.MaxCutRad_slider.setValue(110)
-        self.MaxCutRad_value = 150
-        # self.MaxCutRad_slider.setValue(int(self.Lim_Radius/2))
-        # self.MaxCutRad_value = int(self.Lim_Radius/2)
+        self.MaxCutRad_slider.setValue(100)
+        self.MaxCutRad_value = 100
         self.MaxCutRad_value_Label = QLabel(str(self.MaxCutRad_value))
         self.MaxCutRad_slider.setSingleStep(1)
-        self.MaxCutRad_slider.setTickPosition(QSlider.NoTicks)
+        self.MaxCutRad_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.MaxCutRad_Label.setFixedWidth(200)
         self.MaxCutRad_value_Label.setFixedWidth(100)
         self.MaxCutRad_slider.setFixedWidth(300)
@@ -190,10 +158,10 @@ class FilteringWindow(QDialog):
         self.Vertical_Method     = QPushButton("Vertical Cut", self)
         self.Method_Value = "Azimuthal"
         self.Azimuthal_Method.setFixedWidth(300)
-        self.Diagonal_Method.setFixedWidth(150)
-        self.Antidiagonal_Method.setFixedWidth(150)
-        self.Horizontal_Method.setFixedWidth(150)
-        self.Vertical_Method.setFixedWidth(150)
+        self.Diagonal_Method.setFixedWidth(145)
+        self.Antidiagonal_Method.setFixedWidth(145)
+        self.Horizontal_Method.setFixedWidth(145)
+        self.Vertical_Method.setFixedWidth(145)
 
         self.Gaussian_slider.valueChanged.connect(lambda   value : self.Change_Fit(value, Type='Gaussian'))
         self.Smooth_slider.valueChanged.connect(lambda     value : self.Change_Fit(value, Type='Smooth'))
@@ -224,11 +192,17 @@ class FilteringWindow(QDialog):
         self.MinCutRad_value_Label.setFixedHeight(10)
         self.MaxCutRad_Label.setFixedHeight(10)
         self.MaxCutRad_value_Label.setFixedHeight(10)
-        self.Azimuthal_Method.setFixedHeight(40)
-        self.Diagonal_Method.setFixedHeight(40)
-        self.Antidiagonal_Method.setFixedHeight(40)
-        self.Vertical_Method.setFixedHeight(40)
-        self.Horizontal_Method.setFixedHeight(40)
+
+        self.Azimuthal_Method.setFixedHeight(25)
+        self.Diagonal_Method.setFixedHeight(25)
+        self.Antidiagonal_Method.setFixedHeight(25)
+        self.Vertical_Method.setFixedHeight(25)
+        self.Horizontal_Method.setFixedHeight(25)
+
+        self.progress = QProgressBar(self)
+        self.progress.setMaximum(self.nb_steps)
+        self.progress.setFixedHeight(10)
+        self.progress.setFixedWidth(300)
 
         DiagonalButton = QHBoxLayout()
         DiagonalButton.addWidget(self.Diagonal_Method)
@@ -294,11 +268,13 @@ class FilteringWindow(QDialog):
         Filtering_Layout.addWidget(self.MaxCutRad_slider)
 
         Filtering_Layout.addLayout(MethodButton)
+        Filtering_Layout.addWidget(close_button)
+        Filtering_Layout.addWidget(self.progress)
 
         Figure_Layout = QVBoxLayout()
 
         Figure_Layout.addWidget(self.Filtering_Canvas)
-        Figure_Layout.addWidget(close_button)
+        # Figure_Layout.addWidget(close_button)
 
         All_Layout = QHBoxLayout()
         All_Layout.addLayout(Filtering_Layout)
@@ -308,11 +284,7 @@ class FilteringWindow(QDialog):
         # Créer une figure et un canevas
         self.rect_start = None
         self.rect_preview = None
-        X, Y, X_min, X_max, Y_min, Y_max = Tools.Max_pixel(self.image, self.x_min, self.x_max, self.Noise, R_max=self.R_max, gaussian_filter=self.gaussian_value, smooth_filter=self.smooth_value)
-        self.X_min = np.array(X_min)
-        self.Y_min = np.array(Y_min)
-        self.X_max = np.array(X_max)
-        self.Y_max = np.array(Y_max)
+        X, Y = Tools.Max_pixel(self.image, R_max=self.R_max, gaussian_filter=self.gaussian_value, smooth_filter=self.smooth_value)
         self.X = np.array(X)
         self.Y = np.array(Y)
         self.Filtering_ax.set_facecolor('k')
@@ -370,21 +342,16 @@ class FilteringWindow(QDialog):
         elif Type=="Azimuthal" or Type=='Diagonal' or Type=='Antidiagonal' or Type=='Vertical' or Type=='Horizontal':
             self.Method_Value = Type
         self.Data.remove()
-        X, Y, X_min, X_max, Y_min, Y_max = Tools.Max_pixel(self.image, self.x_min, self.x_max, self.Noise,  R_max           = self.R_max,  
-                                                                                                            gaussian_filter = self.gaussian_value, 
-                                                                                                            smooth_filter   = self.smooth_value, 
-                                                                                                            prominence      = self.Prominence_value, 
-                                                                                                            distance        = self.Distance_value, 
-                                                                                                            width           = self.Width_value, 
-                                                                                                            threshold       = None,
-                                                                                                            HighPass        = self.HighPass_value,
-                                                                                                            Mincut_Radius   = self.MinCutRad_value,
-                                                                                                            Maxcut_Radius   = self.MaxCutRad_value,
-                                                                                                            method          = self.Method_Value)
-        self.X_min = np.array(X_min)
-        self.Y_min = np.array(Y_min)
-        self.X_max = np.array(X_max)
-        self.Y_max = np.array(Y_max)
+        X, Y = Tools.Max_pixel(self.image, R_max = self.R_max,  gaussian_filter = self.gaussian_value, 
+                                                                smooth_filter   = self.smooth_value, 
+                                                                prominence      = self.Prominence_value, 
+                                                                distance        = self.Distance_value, 
+                                                                width           = self.Width_value, 
+                                                                threshold       = None,
+                                                                HighPass        = self.HighPass_value,
+                                                                Mincut_Radius   = self.MinCutRad_value,
+                                                                Maxcut_Radius   = self.MaxCutRad_value,
+                                                                method          = self.Method_Value)
         self.X = np.array(X)
         self.Y = np.array(Y)
         self.Data = self.Filtering_ax.scatter(self.Y, self.X, edgecolor='k', color='cyan', s=5)
@@ -422,10 +389,6 @@ class FilteringWindow(QDialog):
             b = np.where(np.logical_or(np.logical_or(self.X<x1, self.X>x2), np.logical_or(self.Y<y1, self.Y>y2)))
             self.X = self.X[b]
             self.Y = self.Y[b]
-            self.X_min = self.X_min[b]
-            self.Y_min = self.Y_min[b]
-            self.X_max = self.X_max[b]
-            self.Y_max = self.Y_max[b]
             self.Data.remove()
             self.Data = self.Filtering_ax.scatter(self.Y, self.X, edgecolor='k', color='cyan', s=5)
             self.rect_preview.remove()
@@ -438,8 +401,60 @@ class FilteringWindow(QDialog):
     def Continue(self):
         Fit_Name = 'Fitting_' + self.disk_name +'.pkl'
         x0 = y0 = int(len(self.image)/2)
-        Tools.Fitting_Ring(x0, y0, self.X, self.Y, self.X_min, self.X_max, self.Y_min, self.Y_max, 100, Fit_Name, Tsigma=3)
-        # Tools.New_Fitting_Ring(x0, y0, self.X, self.Y, self.X_min, self.X_max, self.Y_min, self.Y_max, 100, Fit_Name, np.shape(self.image), Tsigma=3)
+
+        coeffs = Tools.fit_ellipse(np.array(self.X), np.array(self.Y))
+        Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+
+        incl     = np.arccos(b/a)
+        PA       = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+        X_e, Y_e = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
+        H        = Tools.Height_Compute(X_e, Y_e, x0, y0)/np.sin(incl)
+        R        = a
+        Aspect   = H/R
+        Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e]
+
+        Point_Offset = []
+        for idx in range(len(self.X)):
+            idx_dist     = np.argmin(np.sqrt((X_e - self.X[idx])**2 + (Y_e - self.Y[idx])**2))
+            ellipse_dist = np.sqrt((Xc - X_e[idx_dist])**2 + (Yc - Y_e[idx_dist])**2)
+            point_dist   = np.sqrt((Xc - self.X[idx])**2        + (Yc - self.Y[idx])**2)
+            dist         = ellipse_dist - point_dist
+            Point_Offset.append(dist)
+        
+        Inclinations    = []
+        PositionAngles  = []
+        Heights         = []
+        Mid_Radius      = []
+        for step in range(self.nb_steps):
+            self.progress.setValue(step + 1)
+            nb_points = 100
+            Radius       = np.random.normal(R, np.std(Point_Offset), nb_points)
+            Phi          = np.random.uniform(0, 2*np.pi, nb_points)
+            Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, Xc, Yc, incl, R, H, Aspect, 1, PA)
+            coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
+            Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+            Inclinations.append(np.arccos(b/a))
+            PositionAngles.append(Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE))
+            # X_e, Y_e      = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PositionAngle))
+            Heights.append(np.sqrt((x0-Xc)**2 + (y0-Yc)**2)/np.sin(np.arccos(b/a)))
+            Mid_Radius.append(a)
+
+        D_incl   = np.std(Inclinations)
+        D_PA     = np.std(PositionAngles)
+        D_H      = np.std(Heights)
+        D_R      = np.std(Mid_Radius)
+        D_Chi    = 0
+        D_Aspect = np.std(np.array(Heights)/np.array(Mid_Radius))
+        Data_to_Save    = {"params"     : [incl, R, H, Aspect, 1, PA], 
+                        "Err"        : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
+                        'Points'     : [self.X, self.Y], 
+                        "Ellipse"    : Ellipse_points}
+        GUI_Folder, Fitting_Folder, SPF_Folder = Tools.Init_Folders()
+        with open(f"{Fitting_Folder}/{Fit_Name}", 'wb') as fichier:
+            pkl.dump(Data_to_Save, fichier)
+
+        # Tools.Fitting_Ring(x0, y0, self.X, self.Y, 100, Fit_Name, Tsigma=3)
+        # Tools.New_Fitting_Ring(x0, y0, self.X, self.Y, 100, Fit_Name, np.shape(self.image), Tsigma=3)
         self.Filtering_Fig.clf()
         self.Filtering_Canvas.flush_events()
         plt.close(self.Filtering_Fig)

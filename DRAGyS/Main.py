@@ -2,17 +2,22 @@ import sys
 import os
 import pathlib
 current_folder = pathlib.Path(__file__).parent
-print(current_folder)
 sys.path.append(current_folder)
 import numpy as np
 import time
-from PyQt5.QtWidgets import QTextEdit, QApplication, QWidget, QSlider, QCheckBox, QSpinBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QFrame, QProgressBar
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QTextEdit, QApplication, QScrollArea, QDialog, QSpacerItem, QSizePolicy, QWidget, QSlider, QCheckBox, QSpinBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QFrame, QProgressBar
+from PyQt6.QtCore import Qt
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import matplotlib.patches as patches
+from matplotlib.patches import Wedge
+
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from matplotlib import colors
+from matplotlib.figure import Figure
+
 
 from astropy.io import fits
 import Tools as Tools
@@ -32,15 +37,17 @@ class FileExplorerApp(QWidget):
         self.InputStar          = False 
         self.Image_Displayed    = False
         self.Ellipse_Extraction = False 
-        self.ellipse_in         = False  
+        self.Display_EZ         = False
+        self.CheckEZ            = False
         self.img_name = ''
-        
+        self.AzimuthalAngle = np.linspace(0, 359, 360)
         self.Fitting = None
 
         self.unit = 'Arcsec'
         
-        self.List_Buttons = []
-        self.List_Frame   = []
+        self.List_Buttons    = []
+        self.List_BigButtons = []
+        self.List_Frame      = []
 
         self.GUI_Folder, self.Fitting_Folder, self.SPF_Folder = Tools.Init_Folders()
 
@@ -50,7 +57,6 @@ class FileExplorerApp(QWidget):
 
         self.file_label = QLabel('No file selected', self)
         self.file_label.setFixedHeight(15)
-        self.file_label.setStyleSheet('font-size: 14px;')
         self.fit_file = QLabel("Is Fitting already done ? None", self)
         self.fit_file.setFixedHeight(15)
 
@@ -63,36 +69,21 @@ class FileExplorerApp(QWidget):
         self.Compute_Fit_button.setEnabled(False)
 
         self.CheckInputParams = QCheckBox('Input Parameters', self)
-        self.CheckInputParams.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
         self.CheckInputParams.stateChanged.connect(self.on_check_Input_Parameters)
 
-        self.Inclination_text   = QLabel('i   = ', self)
-        self.PositionAngle_text = QLabel('PA  = ', self)
+        self.Inclination_text   = QLabel('i = ', self)
+        self.PositionAngle_text = QLabel('PA = ', self)
         self.Scale_Height_text  = QLabel('h/r = ', self)
         self.Height_text  = QLabel('h = ', self)
         self.Radius_text  = QLabel('r = ', self)
         self.Alpha_text  = QLabel('alpha = ', self)
 
         self.Err_Inclination_text   = QLabel('° \u00B1 ', self)
-        self.Err_PositionAngle_text = QLabel('° \u00B1  ', self)
+        self.Err_PositionAngle_text = QLabel('° \u00B1 ', self)
         self.Err_Scale_Height_text  = QLabel(' \u00B1 ', self)
         self.Err_Height_text  = QLabel(' \u00B1 ', self)
         self.Err_Radius_text  = QLabel(' \u00B1 ', self)
         self.Err_Alpha_text  = QLabel(' \u00B1 ', self)
-
-        self.fit_file.setStyleSheet('font-size: 14px; color: red;')
-        self.Inclination_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.PositionAngle_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Scale_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Height_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Radius_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Alpha_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_Inclination_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_PositionAngle_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_Scale_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_Radius_text.setStyleSheet('font-size: 14px; color: grey;')
-        self.Err_Alpha_text.setStyleSheet('font-size: 14px; color: grey;')
 
         self.InclinationLine   = QLineEdit(self)
         self.PositionAngleLine = QLineEdit(self)
@@ -107,6 +98,19 @@ class FileExplorerApp(QWidget):
         self.ErrHeightLine   = QLineEdit(self)
         self.ErrRadiusLine   = QLineEdit(self)
         self.ErrPowerLawAlphaLine = QLineEdit(self)
+
+        self.InclinationLine.setFixedWidth(70)
+        self.PositionAngleLine.setFixedWidth(70)
+        self.AspectRatioLine.setFixedWidth(70)
+        self.HeightLine.setFixedWidth(70)
+        self.RadiusLine.setFixedWidth(70)
+        self.PowerLawAlphaLine.setFixedWidth(70)
+        self.ErrInclinationLine.setFixedWidth(70)
+        self.ErrPositionAngleLine.setFixedWidth(70)
+        self.ErrAspectRatioLine.setFixedWidth(70)
+        self.ErrHeightLine.setFixedWidth(70)
+        self.ErrRadiusLine.setFixedWidth(70)
+        self.ErrPowerLawAlphaLine.setFixedWidth(70)
 
         self.InclinationLine.setEnabled(False)
         self.PositionAngleLine.setEnabled(False)
@@ -136,15 +140,12 @@ class FileExplorerApp(QWidget):
         
 
         self.CheckStar = QCheckBox('Non Centered Star', self)
-        self.CheckStar.setStyleSheet('color: grey; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-        self.X_StarPositionLabel = QLabel("(x = ", self)
+        self.X_StarPositionLabel = QLabel("x = ", self)
+        self.Y_StarPositionLabel = QLabel("y = ", self)
         self.X_StarPosition = QLineEdit(self)
-        self.Y_StarPositionLabel = QLabel(", y = ", self)
         self.Y_StarPosition = QLineEdit(self)
-        self.StarPositionLabel = QLabel(")", self)
-        self.X_StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
-        self.Y_StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
-        self.StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
+        self.X_StarPosition.setFixedWidth(50)
+        self.Y_StarPosition.setFixedWidth(50)
         self.CheckStar.stateChanged.connect(self.on_check_Star_Position)
         self.CheckStar.setChecked(False)
         self.CheckStar.setEnabled(False)
@@ -158,6 +159,7 @@ class FileExplorerApp(QWidget):
         self.img_4_button = QPushButton('Image 5', self)
         self.img_5_button = QPushButton('Image 6', self)
         self.HeaderButton = QPushButton('Header',  self)
+        self.AzimuthButton = QPushButton('Remove Azimuth',  self)
 
         self.img_0_button.clicked.connect(lambda: self.Change_View(self.display_0))
         self.img_1_button.clicked.connect(lambda: self.Change_View(self.display_1))
@@ -166,6 +168,7 @@ class FileExplorerApp(QWidget):
         self.img_4_button.clicked.connect(lambda: self.Change_View(self.display_4))
         self.img_5_button.clicked.connect(lambda: self.Change_View(self.display_5))
         self.HeaderButton.clicked.connect(self.Open_Header)
+        self.AzimuthButton.clicked.connect(self.LaunchAzimuthRemover)
 
        
         self.img_0_button.setEnabled(False)
@@ -175,8 +178,10 @@ class FileExplorerApp(QWidget):
         self.img_4_button.setEnabled(False)
         self.img_5_button.setEnabled(False)
         self.HeaderButton.setEnabled(False)
+        self.AzimuthButton.setEnabled(False)
 
         self.HeaderButton.setFixedHeight(80)
+        self.AzimuthButton.setFixedHeight(40)
 
         # Parameters buttons
         self.pixelscale_label = QLabel('Pixelscale ("/pix) : ', self)
@@ -184,23 +189,6 @@ class FileExplorerApp(QWidget):
         self.R_in_label       = QLabel('R_in (au) : ', self)
         self.R_out_label      = QLabel('R_out (au) : ', self)
         self.n_bin_label      = QLabel('nb bins : ', self)
-
-        self.pixelscale_label.setStyleSheet('font-size: 14px;')
-        self.distance_label.setStyleSheet('font-size: 14px;')
-        self.R_in_label.setStyleSheet('font-size: 14px;')
-        self.R_out_label.setStyleSheet('font-size: 14px;')
-        self.n_bin_label.setStyleSheet('font-size: 14px;')
-
-        self.auUnitButton     = QPushButton('au', self)
-        self.PixelUnitButton  = QPushButton('Pixel', self)
-        self.ArcsecUnitButton = QPushButton('Arcsec', self)
-
-        # self.auUnitButton.clicked.connect(lambda: self.ChangeUnit('au'))
-        # self.PixelUnitButton.clicked.connect(lambda: self.ChangeUnit('Pixel'))
-        # self.ArcsecUnitButton.clicked.connect(lambda: self.ChangeUnit('Arcsec'))
-        self.auUnitButton.setEnabled(False)
-        self.ArcsecUnitButton.setEnabled(False)
-        self.PixelUnitButton.setEnabled(False)
 
         self.pixelscale_entry = QLineEdit(self)
         self.distance_entry   = QLineEdit(self)
@@ -210,6 +198,9 @@ class FileExplorerApp(QWidget):
         self.R_in_entry.setMaximum(1000)
         self.R_out_entry.setMinimum(0)
         self.R_out_entry.setMaximum(1000)
+        self.R_in_entry.setFixedWidth(100)
+        self.R_out_entry.setFixedWidth(100)
+
         self.R_adjustement    = QCheckBox('See Adjustment', self)
         self.R_in_entry.valueChanged.connect(self.Extraction_Zone)
         self.R_out_entry.valueChanged.connect(self.Extraction_Zone)
@@ -217,13 +208,6 @@ class FileExplorerApp(QWidget):
         self.R_out_entry.lineEdit().returnPressed.connect(self.Extraction_Zone)
         self.R_adjustement.stateChanged.connect(self.Ring_Adjust_2)
         self.nb_bin_entry     = QLineEdit(self)
-
-        self.pixelscale_entry.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-        self.distance_entry.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-        self.R_in_entry.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-        self.R_out_entry.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-        self.nb_bin_entry.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-
 
         self.pixelscale_entry.setEnabled(False)
         self.distance_entry.setEnabled(False)
@@ -233,15 +217,14 @@ class FileExplorerApp(QWidget):
         self.nb_bin_entry.setEnabled(False)
         self.pixelscale_entry.setEnabled(False)
 
-        self.pixelscale_entry.setFixedWidth(40)
-        self.distance_entry.setFixedWidth(40)
-        self.nb_bin_entry.setFixedWidth(40)
+        self.pixelscale_entry.setFixedWidth(70)
+        self.distance_entry.setFixedWidth(70)
+        self.nb_bin_entry.setFixedWidth(70)
 
         # Zoom button
         self.ZoomLabel  = QLabel("Zoom : ", self)
-        self.ZoomLabel.setStyleSheet('color: black; font-size: 14px;')
         self.ZoomLabel.setFixedHeight(15)
-        self.ZoomSlider = QSlider(Qt.Horizontal)
+        self.ZoomSlider = QSlider(Qt.Orientation.Horizontal)
         self.ZoomSlider.setMinimum(100)
         self.ZoomSlider.setMaximum(2000)
         self.ZoomSlider.setValue(1)
@@ -264,7 +247,6 @@ class FileExplorerApp(QWidget):
         self.Show_img_PhF_button.clicked.connect(self.Show_img_PhF)
 
         self.Is_computed = QLabel('None')
-        self.Is_computed.setStyleSheet('font-size: 14px;')
         self.Is_computed.setFixedHeight(15)
 
         # Add Button in List
@@ -276,33 +258,50 @@ class FileExplorerApp(QWidget):
         self.List_Buttons.append(self.Show_disk_PhF_button)
         self.List_Buttons.append(self.Show_img_PhF_button)
         
-        self.List_Buttons.append(self.auUnitButton)
-        self.List_Buttons.append(self.PixelUnitButton)
-        self.List_Buttons.append(self.ArcsecUnitButton)
-        
         self.List_Buttons.append(self.img_0_button)
         self.List_Buttons.append(self.img_1_button)
         self.List_Buttons.append(self.img_2_button)
         self.List_Buttons.append(self.img_3_button)
         self.List_Buttons.append(self.img_4_button)
         self.List_Buttons.append(self.img_5_button)
+        self.List_Buttons.append(self.AzimuthButton)
         self.List_Buttons.append(self.HeaderButton)
 
-        self.Set_Style_Button()
+        self.List_BigButtons.append(self.HeaderButton)
+
+        for Button in self.List_Buttons:
+            if Button in self.List_BigButtons:
+                Button.setFixedHeight(90)
+            else :
+                Button.setFixedHeight(40)
+
 
         # Figure
-        self.fig, self.ax = plt.subplots(1,1)
+        self.fig = Figure(facecolor="k")
+        self.ax = self.fig.add_subplot(111)
+        # self.fig, self.ax = plt.subplots(1,1, )
         self.ax.set_facecolor('black')
         self.ax.set_ylabel('$\Delta$ RA (arcsec)')
         self.ax.set_xlabel('$\Delta$ DEC (arcsec)')
+        self.ax.set_aspect('equal')
+
+        self.ax.spines['bottom'].set_color('w')
+        self.ax.spines['top'].set_color('w')
+        self.ax.spines['left'].set_color('w')
+        self.ax.spines['right'].set_color('w')
+        self.ax.tick_params(axis='x', colors='w')
+        self.ax.tick_params(axis='y', colors='w')
+        self.ax.xaxis.label.set_color('w')
+        self.ax.yaxis.label.set_color('w')
+
         self.canvas = FigureCanvas(self.fig)
+        self.canvas.setFixedHeight(500)
         layout = QHBoxLayout()
 
         # Browse files
         Browsebox = QFrame()
-        Browsebox.setFrameShape(QFrame.StyledPanel)
-        Browsebox.setFrameShadow(QFrame.Raised)
-        Browsebox.setStyleSheet("background-color: white;")
+        Browsebox.setFrameShape(QFrame.Shape.StyledPanel)
+        Browsebox.setFrameShadow(QFrame.Shadow.Raised)
 
         browsebox = QVBoxLayout()
         browsebox.addWidget(self.browse_button)
@@ -311,81 +310,101 @@ class FileExplorerApp(QWidget):
 
         # Fitting
         FitBox = QFrame()
-        FitBox.setFrameShape(QFrame.StyledPanel)
-        FitBox.setFrameShadow(QFrame.Raised)
-        FitBox.setStyleSheet("background-color: white;")
+        FitBox.setFrameShape(QFrame.Shape.StyledPanel)
+        FitBox.setFrameShadow(QFrame.Shadow.Raised)
 
         FitBoxButton = QVBoxLayout()
         FitBoxButton.addWidget(self.Display_Fit_button)
         FitBoxButton.addWidget(self.Compute_Fit_button)
         FitBoxButton.addWidget(self.fit_file)        
 
-        InclinationBox   = QHBoxLayout()
-        PositionAngleBox = QHBoxLayout()
-        HeightBox        = QHBoxLayout()
-        RadiusBox        = QHBoxLayout()
-        AspectRatioBox   = QHBoxLayout()
-        AlphaBox         = QHBoxLayout()
-
-        InclinationBox.addWidget(self.Inclination_text)
-        InclinationBox.addWidget(self.InclinationLine)
-        InclinationBox.addWidget(self.Err_Inclination_text)
-        InclinationBox.addWidget(self.ErrInclinationLine)
-        PositionAngleBox.addWidget(self.PositionAngle_text)
-        PositionAngleBox.addWidget(self.PositionAngleLine)
-        PositionAngleBox.addWidget(self.Err_PositionAngle_text)
-        PositionAngleBox.addWidget(self.ErrPositionAngleLine)
-        HeightBox.addWidget(self.Height_text)
-        HeightBox.addWidget(self.HeightLine)
-        HeightBox.addWidget(self.Err_Height_text)
-        HeightBox.addWidget(self.ErrHeightLine)
-        RadiusBox.addWidget(self.Radius_text)
-        RadiusBox.addWidget(self.RadiusLine)
-        RadiusBox.addWidget(self.Err_Radius_text)
-        RadiusBox.addWidget(self.ErrRadiusLine)
-        AspectRatioBox.addWidget(self.Scale_Height_text)
-        AspectRatioBox.addWidget(self.AspectRatioLine)
-        AspectRatioBox.addWidget(self.Err_Scale_Height_text)
-        AspectRatioBox.addWidget(self.ErrAspectRatioLine)
-        AlphaBox.addWidget(self.Alpha_text)
-        AlphaBox.addWidget(self.PowerLawAlphaLine)
-        AlphaBox.addWidget(self.Err_Alpha_text)
-        AlphaBox.addWidget(self.ErrPowerLawAlphaLine)
-
-        StarPositionBox = QHBoxLayout()
-        StarPositionBox.addWidget(self.CheckStar)
-        StarPositionBox.addWidget(self.X_StarPositionLabel)
-        StarPositionBox.addWidget(self.X_StarPosition)
-        StarPositionBox.addWidget(self.Y_StarPositionLabel)
-        StarPositionBox.addWidget(self.Y_StarPosition)
-        StarPositionBox.addWidget(self.StarPositionLabel)
+        Errorbox = QVBoxLayout()
+        Errorbox.addWidget(self.ErrInclinationLine)
+        Errorbox.addWidget(self.ErrPositionAngleLine)
+        Errorbox.addWidget(self.ErrHeightLine)
+        Errorbox.addWidget(self.ErrRadiusLine)
+        Errorbox.addWidget(self.ErrAspectRatioLine)
+        Errorbox.addWidget(self.ErrPowerLawAlphaLine)
         
-        FitParameters = QVBoxLayout()
-        FitParameters.addWidget(self.CheckInputParams)
-        FitParameters.addLayout(InclinationBox)
-        FitParameters.addLayout(PositionAngleBox)
-        FitParameters.addLayout(HeightBox)
-        FitParameters.addLayout(RadiusBox)
-        FitParameters.addLayout(AspectRatioBox)
-        FitParameters.addLayout(AlphaBox)
-        # FitParameters.addLayout(StarPositionBox)
+        PMBox = QVBoxLayout()
+        PMBox.addWidget(self.Err_Inclination_text)
+        PMBox.addWidget(self.Err_PositionAngle_text)
+        PMBox.addWidget(self.Err_Height_text)
+        PMBox.addWidget(self.Err_Radius_text)
+        PMBox.addWidget(self.Err_Scale_Height_text)
+        PMBox.addWidget(self.Err_Alpha_text)
+
+        ValueBox = QVBoxLayout()
+        ValueBox.addWidget(self.InclinationLine)
+        ValueBox.addWidget(self.PositionAngleLine)
+        ValueBox.addWidget(self.HeightLine)
+        ValueBox.addWidget(self.RadiusLine)
+        ValueBox.addWidget(self.AspectRatioLine)
+        ValueBox.addWidget(self.PowerLawAlphaLine)
+
+
+
+        TxtBox = QVBoxLayout()
+        TxtBox.addWidget(self.Inclination_text)
+        TxtBox.addWidget(self.PositionAngle_text)
+        TxtBox.addWidget(self.Height_text)
+        TxtBox.addWidget(self.Radius_text)
+        TxtBox.addWidget(self.Scale_Height_text)
+        TxtBox.addWidget(self.Alpha_text)
+
+
+
+        StarPositionBox = QVBoxLayout()
+        StarPositionBox.addWidget(self.CheckStar)
+        xPosition = QHBoxLayout()
+        yPosition = QHBoxLayout()
+        xPosition.addWidget(self.X_StarPositionLabel)
+        xPosition.addWidget(self.X_StarPosition)
+        yPosition.addWidget(self.Y_StarPositionLabel)
+        yPosition.addWidget(self.Y_StarPosition)
+        xPosition.setAlignment(self.X_StarPositionLabel, Qt.AlignmentFlag.AlignRight)
+        yPosition.setAlignment(self.Y_StarPositionLabel, Qt.AlignmentFlag.AlignRight)
+        xPosition.setAlignment(self.X_StarPosition, Qt.AlignmentFlag.AlignLeft)
+        yPosition.setAlignment(self.Y_StarPosition, Qt.AlignmentFlag.AlignLeft)
+        StarPositionBox.addLayout(xPosition)
+        StarPositionBox.addLayout(yPosition)
+        FitBoxButton.addLayout(StarPositionBox)
+
+        VFitParameters = QVBoxLayout()
+        FitParameters = QHBoxLayout()
+        FitParameters.setAlignment(Qt.AlignmentFlag.AlignRight)
+        FitParameters.addLayout(TxtBox)
+        FitParameters.addLayout(ValueBox)
+        FitParameters.addLayout(PMBox)
+        FitParameters.addLayout(Errorbox)
+
+        VFitParameters.addLayout(FitParameters)
+        VFitParameters.addWidget(self.AzimuthButton)
+        
+
+        
+        FitParameters.setAlignment(TxtBox,   Qt.AlignmentFlag.AlignRight)
+        FitParameters.setAlignment(ValueBox, Qt.AlignmentFlag.AlignRight)
+        FitParameters.setAlignment(PMBox,    Qt.AlignmentFlag.AlignRight)
+        FitParameters.setAlignment(Errorbox, Qt.AlignmentFlag.AlignRight)
+
 
         fitbox0 = QHBoxLayout()
         fitbox0.addLayout(FitBoxButton)
-        fitbox0.addLayout(FitParameters)
-        # FitBox.setLayout(fitbox0)
+        spacer = QSpacerItem(50, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        fitbox0.addItem(spacer)
+        fitbox0.addLayout(VFitParameters)
 
         fitbox = QVBoxLayout()
+        fitbox.addWidget(self.CheckInputParams)
         fitbox.addLayout(fitbox0)
-        fitbox.addLayout(StarPositionBox)
         FitBox.setLayout(fitbox)
+        fitbox.setAlignment(self.AzimuthButton, Qt.AlignmentFlag.AlignRight)
+        fitbox.setAlignment(self.CheckInputParams, Qt.AlignmentFlag.AlignRight)
+
 
     
         # Parameters
-        UnitBox = QHBoxLayout()
-        UnitBox.addWidget(self.auUnitButton)
-        UnitBox.addWidget(self.ArcsecUnitButton)
-        UnitBox.addWidget(self.PixelUnitButton)
         pixelscalebox = QHBoxLayout()
         pixelscalebox.addWidget(self.pixelscale_label)
         pixelscalebox.addWidget(self.pixelscale_entry)
@@ -414,19 +433,12 @@ class FileExplorerApp(QWidget):
         RightParaBox.addWidget(self.R_adjustement)
 
         ParaBox = QFrame()
-        ParaBox.setFrameShape(QFrame.StyledPanel)
-        ParaBox.setFrameShadow(QFrame.Raised)
-        ParaBox.setStyleSheet("background-color: white;")
-
+        ParaBox.setFrameShape(QFrame.Shape.StyledPanel)
+        ParaBox.setFrameShadow(QFrame.Shadow.Raised)
         parabox = QHBoxLayout()
         parabox.addLayout(LeftParaBox)
         parabox.addLayout(RightParaBox)
-
-        AllParamBox = QVBoxLayout()
-        AllParamBox.addLayout(UnitBox)
-        AllParamBox.addLayout(parabox)
-
-        ParaBox.setLayout(AllParamBox)
+        ParaBox.setLayout(parabox)
 
         # Phase Function
         PhFbox = QVBoxLayout()
@@ -439,9 +451,8 @@ class FileExplorerApp(QWidget):
         PhFbox.addWidget(self.Is_computed)
 
         AllPhFbox = QFrame()
-        AllPhFbox.setFrameShape(QFrame.StyledPanel)
-        AllPhFbox.setFrameShadow(QFrame.Raised)
-        AllPhFbox.setStyleSheet("background-color: white;")
+        AllPhFbox.setFrameShape(QFrame.Shape.StyledPanel)
+        AllPhFbox.setFrameShadow(QFrame.Shadow.Raised)
 
         allphfbox = QVBoxLayout()
         allphfbox.addLayout(PhFbox)
@@ -472,9 +483,8 @@ class FileExplorerApp(QWidget):
         # Imshow
         DisplayBox = QFrame()
         DisplayBox.setFixedHeight(150)
-        DisplayBox.setFrameShape(QFrame.StyledPanel)
-        DisplayBox.setFrameShadow(QFrame.Raised)
-        DisplayBox.setStyleSheet("background-color: white;")
+        DisplayBox.setFrameShape(QFrame.Shape.StyledPanel)
+        DisplayBox.setFrameShadow(QFrame.Shadow.Raised)
         displaybox  = QVBoxLayout()
         displaybox1 = QHBoxLayout()
         displaybox1.addLayout(h1box)
@@ -490,9 +500,8 @@ class FileExplorerApp(QWidget):
         # Organisation
         LeftBBox = QFrame()
         LeftBBox.setFixedWidth(500)
-        LeftBBox.setFrameShape(QFrame.StyledPanel)
-        LeftBBox.setFrameShadow(QFrame.Raised)
-        LeftBBox.setStyleSheet("background-color: lightgrey;")
+        LeftBBox.setFrameShape(QFrame.Shape.StyledPanel)
+        LeftBBox.setFrameShadow(QFrame.Shadow.Raised)
 
         leftbbox = QVBoxLayout()
         leftbbox.addWidget(Browsebox)
@@ -503,13 +512,13 @@ class FileExplorerApp(QWidget):
         LeftBBox.setLayout(leftbbox)
         
         RightBBox = QFrame()
-        RightBBox.setFrameShape(QFrame.StyledPanel)
-        RightBBox.setFrameShadow(QFrame.Raised)
-        RightBBox.setStyleSheet("background-color: lightgrey;")
+        RightBBox.setFrameShape(QFrame.Shape.StyledPanel)
+        RightBBox.setFrameShadow(QFrame.Shadow.Raised)
         rightbbox = QVBoxLayout()
         rightbbox.addWidget(self.ZoomLabel)
         rightbbox.addWidget(self.ZoomSlider)
         rightbbox.addWidget(self.canvas)
+        rightbbox.setAlignment(self.canvas, Qt.AlignmentFlag.AlignCenter)
         rightbbox.addWidget(DisplayBox)
 
         RightBBox.setLayout(rightbbox)
@@ -519,51 +528,11 @@ class FileExplorerApp(QWidget):
         self.setLayout(layout)
 
         
-        self.setGeometry(100, 100, 1200, 900)
+        self.setGeometry(50, 50, 1200, 500)
         self.setWindowTitle('GUI Disk Fitting Yields to Scattering Phase Function Extraction')
-        
-    def Set_Style_Button(self):
-        for button in self.List_Buttons:
-            if button.isEnabled():
-                bg_color = 'lightgrey'
-                tx_color = 'Black'
-                bd_color = 'grey'
-            else :
-                bg_color = 'white'
-                tx_color = 'grey'
-                bd_color = 'lightgrey'
-            button.setStyleSheet('QPushButton {'
-                                        'color: ' + tx_color + ';'
-                                        'background-color: '+ bg_color +';'
-                                        'border: 2px solid '+ bd_color +';'
-                                        'border-radius: 8px;'
-                                        'padding: 8px 16px;'
-                                        'font-size: 14px;'
-                                        '}'
-                                        'QPushButton:hover {'
-                                        'background-color: grey;'
-                                        '}'
-                                        'QPushButton:pressed {'
-                                        'border-style: inset;'
-                                        '}')
-        for frame in self.List_Frame :
-            frame.setStyleSheet('QPushButton {'
-                                        'color: ;'
-                                        'background-color: #4CAF50;'
-                                        'border: 2px solid #4CAF50;'
-                                        'border-radius: 8px;'
-                                        'padding: 8px 16px;'
-                                        'font-size: 14px;'
-                                        '}'
-                                'QPushButton : hover {'
-                                        'background-color: #45a049;'
-                                        '}'
-                                'QPushButton : pressed {'
-                                        'border-style: inset;'
-                                        '}')
             
     def Set_Initial_Values(self):
-        print(self.file_name.replace(' ', '').replace('_', '').replace('-', '').upper())
+        # print(self.file_name.replace(' ', '').replace('_', '').replace('-', '').upper())
         self.nb_bin_entry.setEnabled(True)
         self.pixelscale_entry.setEnabled(True)
         self.R_in_entry.setEnabled(True)
@@ -637,7 +606,6 @@ class FileExplorerApp(QWidget):
             self.pixelscale_entry.setText('0.0036')
         self.pixelscale = float(self.pixelscale_entry.text())
         self.r_beam = self.lam/self.Diameter
-        # print(self.Diameter, self.lam)
 
 # ========================================================================================
 # ================================    File Finder    =====================================
@@ -685,7 +653,7 @@ class FileExplorerApp(QWidget):
                     self.ErrAspectRatioLine.setText(str(0))
                 self.PowerLawAlphaLine.setText("1")
                 self.ErrPowerLawAlphaLine.setText("0")
-                self.fit_file.setStyleSheet('font-size: 14px; color: green;')
+                self.fit_file.setStyleSheet('color: green;')
                 self.Compute_PhF_button.setEnabled(True)
                 self.Display_Fit_button.setEnabled(True)
                 self.R_adjustement.setEnabled(True)
@@ -704,21 +672,20 @@ class FileExplorerApp(QWidget):
                 self.ErrAspectRatioLine.setText(" None ")
                 self.PowerLawAlphaLine.setText("1")
                 self.ErrPowerLawAlphaLine.setText("0")
-                self.fit_file.setStyleSheet('font-size: 14px; color: red;')
+                self.fit_file.setStyleSheet('color: red;')
                 self.Compute_PhF_button.setEnabled(False)
                 self.Display_Fit_button.setEnabled(False)
                 self.R_adjustement.setEnabled(False)
             if self.img_name + '_' + self.disk_name + '.spf' in os.listdir(self.SPF_Folder) :
                 self.Is_computed.setText(self.disk_name + " Phase Function is already computed")
-                self.Is_computed.setStyleSheet('font-size: 14px; color: green')
+                self.Is_computed.setStyleSheet('color: green')
                 self.Show_disk_PhF_button.setEnabled(True)
                 self.Show_img_PhF_button.setEnabled(True)
             else : 
                 self.Is_computed.setText(self.disk_name + " Phase Function is not computed")
-                self.Is_computed.setStyleSheet('font-size: 14px; color: red')
+                self.Is_computed.setStyleSheet('color: red')
                 self.Show_disk_PhF_button.setEnabled(False)
                 self.Show_img_PhF_button.setEnabled(False)
-        self.Set_Style_Button()
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
 
@@ -734,15 +701,14 @@ class FileExplorerApp(QWidget):
                 img.set_visible(True)
                 if self.img_name + '_' + self.disk_name + '.spf' in os.listdir(self.SPF_Folder) :
                     self.Is_computed.setText(self.disk_name + " Phase Function is already computed")
-                    self.Is_computed.setStyleSheet('font-size: 14px; color: green')
+                    self.Is_computed.setStyleSheet('color: green')
                     self.Show_disk_PhF_button.setEnabled(True)
                     self.Show_img_PhF_button.setEnabled(True)
                 else : 
                     self.Is_computed.setText(self.disk_name + " Phase Function is not computed")
-                    self.Is_computed.setStyleSheet('font-size: 14px; color: red')
+                    self.Is_computed.setStyleSheet('color: red')
                     self.Show_disk_PhF_button.setEnabled(False)
                     self.Show_img_PhF_button.setEnabled(False)
-                self.Set_Style_Button()
             else:
                 img.set_visible(False)
         self.Zoom_Slider_Update(self.ZoomSlider.value())
@@ -773,6 +739,7 @@ class FileExplorerApp(QWidget):
         self.img_4_button.setEnabled(True)
         self.img_5_button.setEnabled(True)
         self.HeaderButton.setEnabled(True)
+        self.AzimuthButton.setEnabled(True)
         # self.display_I      = self.ax.imshow(self.stokes_I,    extent=[-size, size, -size, size], origin='lower', cmap="gnuplot", norm=colors.LogNorm(), visible=False)
         # self.display_Qphi   = self.ax.imshow(self.stokes_Qphi, extent=[-size, size, -size, size], origin='lower', cmap="gnuplot", norm=colors.LogNorm(), visible=False)
         # self.display_Uphi   = self.ax.imshow(self.stokes_Uphi, extent=[-size, size, -size, size], origin='lower', cmap="gnuplot", norm=colors.LogNorm(), visible=False)
@@ -791,6 +758,8 @@ class FileExplorerApp(QWidget):
         self.img_chose    = self.img_0
         self.thresh_chose = self.thresh_0
         self.img_name  = self.all_name[0]
+        self.rect_noise = Rectangle((-2, -2), 4, 4, edgecolor='w', fc="none", zorder=1000)
+        self.ax.add_patch(self.rect_noise)
         # self.all_display = [self.display_I, self.display_Qphi, self.display_Uphi, self.display_Q, self.display_U, self.display_LPI, self.display_img_I, self.display_img_PI]
         self.all_display = [self.display_0, self.display_1, self.display_2, self.display_3, self.display_4, self.display_5]
         self.Zoom_Slider_Update(self.ZoomSlider.value())
@@ -812,20 +781,8 @@ class FileExplorerApp(QWidget):
 # =====================    Fitting Part   ==========================
 # ==================================================================
     def on_check_Input_Parameters(self, state):
-        if state ==  Qt.Checked:
+        if state ==  2:
             self.InputParams = True
-            self.Inclination_text.setStyleSheet('font-size: 14px; color: black;')
-            self.PositionAngle_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Height_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Radius_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Scale_Height_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Alpha_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_Inclination_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_PositionAngle_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_Height_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_Radius_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_Scale_Height_text.setStyleSheet('font-size: 14px; color: black;')
-            self.Err_Alpha_text.setStyleSheet('font-size: 14px; color: black;')
             self.InclinationLine.setEnabled(True)
             self.PositionAngleLine.setEnabled(True)
             self.HeightLine.setEnabled(True)
@@ -840,18 +797,6 @@ class FileExplorerApp(QWidget):
             self.ErrPowerLawAlphaLine.setEnabled(True)
         else:
             self.InputParams = False
-            self.Inclination_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.PositionAngle_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Height_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Radius_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Scale_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Alpha_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_Inclination_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_PositionAngle_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_Radius_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_Scale_Height_text.setStyleSheet('font-size: 14px; color: grey;')
-            self.Err_Alpha_text.setStyleSheet('font-size: 14px; color: grey;')
             self.InclinationLine.setEnabled(False)
             self.PositionAngleLine.setEnabled(False)
             self.HeightLine.setEnabled(False)
@@ -866,21 +811,13 @@ class FileExplorerApp(QWidget):
             self.ErrPowerLawAlphaLine.setEnabled(False)
 
     def on_check_Star_Position(self, state):
-        if state ==  Qt.Checked:
+        if state ==  2:
             self.InputStar = True
-            self.CheckStar.setStyleSheet('color: black; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-            self.X_StarPositionLabel.setStyleSheet('font-size: 14px; color: black;')
-            self.Y_StarPositionLabel.setStyleSheet('font-size: 14px; color: black;')
-            self.StarPositionLabel.setStyleSheet('font-size: 14px; color: black;')
             self.X_StarPosition.setEnabled(True)
             self.Y_StarPosition.setEnabled(True)
 
         else:
             self.InputStar = False
-            self.CheckStar.setStyleSheet('color: grey; background-color: white; border: 2px solid lightgrey; border-radius: 8px; font-size: 14px;')
-            self.X_StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
-            self.Y_StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
-            self.StarPositionLabel.setStyleSheet('font-size: 14px; color: grey;')
             self.X_StarPosition.setText(str(len(self.img_0)/2))
             self.Y_StarPosition.setText(str(len(self.img_0)/2))
             self.X_StarPosition.setEnabled(False)
@@ -942,18 +879,17 @@ class FileExplorerApp(QWidget):
 # ===================    Data Filtering    =========================
 # ==================================================================
 
-
     def Launch_Filtering_Data(self):
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.text())
         x_min, x_max = x_min/PixelScale + len(self.img_0)/2, x_max/PixelScale + len(self.img_0)/2
         self.Filtering_Window = FilteringWindow(self.disk_name, self.img_chose, self.thresh_chose, x_min, x_max)
         # self.Filtering_Window = FilteringWindow(self.disk_name, self.stokes_Qphi, x_min, x_max)
-        self.Filtering_Window.exec_()
+        self.Filtering_Window.exec()
         if self.fit_file_name in os.listdir(self.Fitting_Folder):
             self.Display_Fit_button.setEnabled(True)
             self.fit_file.setText("Is Fitting already? Yes")
-            self.fit_file.setStyleSheet('font-size: 14px; color: green;')
+            self.fit_file.setStyleSheet('color: green;')
             [self.incl, self.r_ref, self.h_ref, self.aspect, self.alpha, self.PA], [self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, self.D_alpha, self.D_PA] = self.Structure_Params()
             self.InclinationLine.setText(str(np.round(np.degrees(self.incl),2)))
             self.ErrInclinationLine.setText(str(np.round(np.degrees(self.D_incl),2)))
@@ -980,7 +916,6 @@ class FileExplorerApp(QWidget):
             self.Compute_PhF_button.setEnabled(True)
 
             self.R_adjustement.setEnabled(True)
-            self.Set_Style_Button()
 
     def Structure_Params(self):
         Fit_Name = 'Fitting_' + self.disk_name + '.pkl'
@@ -1006,15 +941,18 @@ class FileExplorerApp(QWidget):
 # ===================    Extraction Zone   =========================
 # ==================================================================
     def Ring_Adjust_2(self, state):
-        if state == Qt.Checked:
-            self.Ellipse_Extraction = True
-            self.Extraction_Zone()
+        if state == 0:
+            self.CheckEZ = False
+            if self.Display_EZ:
+                self.ellipse_in.remove()
+                for fill_obj in self.ellipse_zone:
+                    fill_obj.remove()
+                self.ellipse_out.remove()
+                self.canvas.draw()
+                self.Display_EZ = False
         else:
-            self.Ellipse_Extraction = False
-            self.ellipse_in.remove()
-            self.ellipse_out.remove()
-            self.ellipse_in = False
-            self.canvas.draw()
+            self.CheckEZ = True
+            self.Extraction_Zone()
             
     def Extraction_Zone(self):
         try :
@@ -1029,28 +967,36 @@ class FileExplorerApp(QWidget):
         except ValueError:
             GoodParams = False    
 
-        if self.Ellipse_Extraction and GoodParams :
-                if self.ellipse_in != False:
-                    self.ellipse_in.remove()
-                    self.ellipse_out.remove()
-                R_in          = int(self.R_in_entry.value())
-                R_out         = int(self.R_out_entry.value())
-                pixelscale    = float(self.pixelscale_entry.text())
-                size          = len(self.img_0)
-                # arcsec_extent = size * pixelscale
+        if GoodParams and self.CheckEZ:
+            if self.Display_EZ:
+                self.ellipse_in.remove()
+                self.ellipse_out.remove()
+                for fill_obj in self.ellipse_zone:
+                    fill_obj.remove()
+                self.Display_EZ = False
 
-                X_in, Y_in    = self.Ellipse(R_in, pixelscale) #*1.996007984)
-                X_out, Y_out  = self.Ellipse(R_out, pixelscale) #*1.996007984)
-                self.ellipse_in  = self.ax.scatter(X_in, Y_in, c='gold', s=1)
-                self.ellipse_out = self.ax.scatter(X_out, Y_out, c='gold', s=1)
-                self.canvas.draw()
+            R_in          = int(self.R_in_entry.value())
+            R_out         = int(self.R_out_entry.value())
+            pixelscale    = float(self.pixelscale_entry.text())
+            size          = len(self.img_0)
+            # arcsec_extent = size * pixelscale
+
+            X_in, Y_in    = self.Ellipse(R_in, pixelscale) #*1.996007984)
+            X_out, Y_out  = self.Ellipse(R_out, pixelscale) #*1.996007984)
+            self.ellipse_zone = self.ax.fill(np.append(X_in, X_out[::-1]), 
+                                    np.append(Y_in, Y_out[::-1]), 
+                                    color='gold', alpha=0.4, linestyle='')
+            self.ellipse_in   = self.ax.scatter(X_in, Y_in, c='orange', s=1)
+            self.ellipse_out  = self.ax.scatter(X_out, Y_out, c='orange', s=1)
+            self.canvas.draw()
+            self.Display_EZ = True
 
     def Ellipse(self, R, pixelscale):
         [self.incl, self.r_ref, self.h_ref, self.aspect, self.alpha, self.PA], [self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, self.D_alpha, self.D_PA] = self.Structure_Params()
         [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure('Fitting_' + self.disk_name + '.pkl', Type='Ellipse')
         xs = ys = len(self.img_0)/2
         yc_p, xc_p = Tools.Orthogonal_Prejection((xs, ys), (Yc, Xc), np.pi/2 - self.PA)
-        Phi = np.linspace(0, 359, 360)
+        Phi = np.radians(np.linspace(0, 359, 360))
         d = float(self.distance_entry.text())
         FoV_au = d * (648000/np.pi) * np.tan(pixelscale*len(self.img_0)/3600 * np.pi/180)
         pixelscale_au = FoV_au/len(self.img_0)
@@ -1092,7 +1038,6 @@ class FileExplorerApp(QWidget):
         ys = float(self.Y_StarPosition.text())
         if self.InputStar:
             [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure('Fitting_' + self.disk_name + '.pkl', Type='Ellipse')
-            print(np.sqrt((xs-Xc)**2 + (ys-Yc)**2))
         else:
             Xc, Yc = None, None
     
@@ -1123,20 +1068,19 @@ class FileExplorerApp(QWidget):
         start = time.time()
         self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 7
         self.computation_step = 0
-        list_params_SPF = [ [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "Total"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), Min_incl, PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "Incl"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), Max_incl, PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "Incl"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     Min_PA, R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "PA"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     Max_PA, R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "PA"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, Min_aspect,    alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "Aspect"],
-                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, Max_aspect,    alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, "Aspect"]]
+        list_params_SPF = [ [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Total"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), Min_incl, PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Incl"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), Max_incl, PA,     R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Incl"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     Min_PA, R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "PA"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     Max_PA, R_ref, H_ref, aspect,        alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "PA"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, Min_aspect,    alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Aspect"],
+                            [self.img_chose, distance, pixelscale, self.r_beam, (xs, ys), (Xc, Yc), incl,     PA,     R_ref, H_ref, Max_aspect,    alpha, Err_incl, Err_R_ref, Err_H_ref, Err_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Aspect"]]
         SPF.Compute_SPF(list_params_SPF, self.file_name, self.img_name)
         end = time.time()
         self.Is_computed.setText(" SPF computed - time = " +str(np.round(end-start, 2)) + ' seconds')
-        self.Is_computed.setStyleSheet('font-size: 14px; color: green')
+        self.Is_computed.setStyleSheet('color: green')
         self.Show_disk_PhF_button.setEnabled(True)
         self.Show_img_PhF_button.setEnabled(True)
-        self.Set_Style_Button()
 
 # ==================================================================
 # ===================    Display Results   =========================
@@ -1189,7 +1133,6 @@ class FileExplorerApp(QWidget):
         self.Scatt,      self.I,      self.PI,      self.Err_Scatt,      self.Err_I,      self.Err_PI,      self.LB     , self.Err_LB      = Tools.Get_PhF(folder, side='All')
         self.Scatt_east, self.I_east, self.PI_east, self.Err_Scatt_east, self.Err_I_east, self.Err_PI_east, self.LB_east, self.Err_LB_east = Tools.Get_PhF(folder, side='East')
         self.Scatt_west, self.I_west, self.PI_west, self.Err_Scatt_west, self.Err_I_west, self.Err_PI_west, self.LB_west, self.Err_LB_west = Tools.Get_PhF(folder, side='West')
-        # print(self.PI)
         self.I_Displayed    = self.ax_Disk_PhF_I.errorbar(self.Scatt, self.I, xerr=self.Err_Scatt, yerr=np.abs(self.Err_I), color='black', label='all disk')
         self.PI_Displayed   = self.ax_Disk_PhF_PI.errorbar(self.Scatt, self.PI, xerr=self.Err_Scatt, yerr=np.abs(self.Err_PI), color='black', label='all disk')
         self.DoP_Displayed  = self.ax_Disk_DoP.errorbar(self.Scatt, self.PI/self.I, xerr=self.Err_Scatt, yerr=np.sqrt((self.Err_PI/self.PI)**2 + (self.Err_I/self.I)**2), color='black', label='all disk')
@@ -1228,7 +1171,7 @@ class FileExplorerApp(QWidget):
         self.Disk_PhF.show()
 
     def NormalizeCheck(self, state):
-        if state == Qt.Checked:
+        if state == 2:
             self.ShowNormalized = True
             self.ax_Disk_PhF_I.autoscale()
         else:
@@ -1237,21 +1180,21 @@ class FileExplorerApp(QWidget):
         self.Update_Show_PhF()
     
     def LBCheck(self, state):
-        if state == Qt.Checked:
+        if state == 2:
             self.LBremoved = True
         else:
             self.LBremoved = False
         self.Update_Show_PhF()
         
     def SideCheck(self, state):
-        if state == Qt.Checked:
+        if state == 2:
             self.ShowSide = True
         else:
             self.ShowSide = False
         self.Update_Show_PhF()
     
     def LogCheck(self, state):
-        if state == Qt.Checked:
+        if state == 2:
             self.LogScale = True
             self.ax_Disk_PhF_I.set_yscale('log')
             self.ax_Disk_PhF_PI.set_yscale('log')
@@ -1262,7 +1205,7 @@ class FileExplorerApp(QWidget):
         self.Update_Show_PhF()
 
     def MCFOSTCheck(self, state):
-        if state == Qt.Checked:
+        if state == 2:
             self.ShowMCFOST = True
             self.ShowNormalized = True
             self.NormButton.setChecked(True)
@@ -1383,8 +1326,6 @@ class FileExplorerApp(QWidget):
         ax_phF.clear()
         # ax_img.clear()
         ax_img_Extraction.clear()
-
-        
         
         Canvas_Img_PhF = FigureCanvas(Fig_img_phF)
         Toolbar = NavigationToolbar(Canvas_Img_PhF, self)
@@ -1426,8 +1367,9 @@ class FileExplorerApp(QWidget):
         X_out, Y_out = self.Ellipse(R_out, pixelscale)
         # ax_img_Extraction.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), c='green', alpha=0.3, ls='')
         ax_img_Extraction.set_facecolor('black')
-        ax_img_Extraction.scatter(X_in,  Y_in,  s=1, c='green')
-        ax_img_Extraction.scatter(X_out, Y_out, s=1, c='green')
+        self.ellipse_zone = self.ax.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), color='gold', alpha=0.4, linestyle='')
+        ax_img_Extraction.scatter(X_in,  Y_in,  s=1, c='orange')
+        ax_img_Extraction.scatter(X_out, Y_out, s=1, c='orange')
         ax_phF.errorbar(Scatt, PI, xerr=Err_Scatt, yerr=np.abs(Err_PI), marker='.', capsize=2, color='black', label='LB uncorrected', ls='dashed', alpha=0.2)
         # ax_phF.errorbar(Scatt, PI, xerr=Err_Scatt, yerr=np.abs(Err_PI), color='black', label='all disk')
         ax_phF.errorbar(Scatt, PI_LB,  xerr=Err_Scatt,  yerr=np.abs(Err_PI_LB), marker='.', capsize=2, color='black', label='LB corrected')
@@ -1463,6 +1405,21 @@ class FileExplorerApp(QWidget):
             header_text = repr(header)
             self.h_refeader_window = HeaderWindow(header_text)
             self.h_refeader_window.show()
+    
+    def LaunchAzimuthRemover(self):
+        (x_min, x_max) = self.ax.get_xlim() 
+        PixelScale = float(self.pixelscale_entry.text())
+        x_min, x_max = x_min/PixelScale + len(self.img_chose)/2, x_max/PixelScale + len(self.img_chose)/2
+
+        AzimuthWindow = AzimuthEllipseApp(self.img_chose, self.thresh_chose, x_min, x_max)
+        # AzimuthWindow.show()
+        AzimuthWindow.exec()
+        self.AzimuthalAngle = np.array(AzimuthWindow.Azimuth.flatten())
+        # print(AzimuthWindow.Azimuth)
+        # print(AzimuthWindow.Azimuth.flatten())
+        # fig, ax =plt.subplots(1, 1, num='freuiehuiegerhi')
+        # ax.scatter(AzimuthWindow.Azimuth, AzimuthWindow.Azimuth)
+        # plt.show()
 
 class HeaderWindow(QWidget):
     def __init__(self, header_text):
@@ -1478,9 +1435,207 @@ class HeaderWindow(QWidget):
         layout.addWidget(self.text_edit)
         self.setLayout(layout)
 
+class AzimuthEllipseApp(QDialog):
+    def __init__(self, image, threshold, x_min, x_max):
+        super().__init__()
+
+        self.setWindowTitle('Suppression d\'azimut sur ellipse')
+        self.setGeometry(100, 100, 1000, 800)  # Fenêtre plus large pour placer l'historique à droite
+        self.Azimuth = np.linspace(0, 359, 360)
+        self.azmask  = list(np.argwhere(np.logical_and(self.Azimuth<=0, self.Azimuth>=360)))
+        self.fig = Figure()
+        self.canvas = FigureCanvas(self.fig)
+        self.ax = self.fig.add_subplot(111)
+        self.img_size   = len(image)/2
+        self.img_width  = np.abs(x_max - x_min)/2
+        self.image      = image
+        self.threshold  = threshold
+        self.x_min = x_min
+        self.x_max = x_max
+        # Paramètres de l'ellipse
+        self.ellipse_center = (0, 0)
+        self.ellipse_width  = self.img_width/2
+        self.ellipse_height = self.img_width/2
+
+        # Initialisation de la liste des wedges supprimés
+        self.removed_intervals = []
+        self.removed_angle = []
+        self.current_wedge = None  # Wedge temporaire pendant le clic
+        self.is_drawing = False    # Pour savoir si l'utilisateur maintient le clic
+
+        self.draw_ellipse()
+
+        # Layout principal
+        self.main_widget = QWidget(self)
+        main_layout = QHBoxLayout(self.main_widget)  # Layout horizontal pour placer la figure à gauche et l'historique à droite
+
+        closeAzimuth = QPushButton('Save Azimuth Angle', self)
+        closeAzimuth.clicked.connect(self.SaveAzimuth)
+
+        # Ajouter la figure matplotlib
+        main_layout.addWidget(self.canvas)
+        main_layout.addWidget(closeAzimuth)
+
+        # Zone pour l'historique à droite
+        self.history_widget = QWidget()
+        self.history_layout = QVBoxLayout(self.history_widget)
+        self.history_layout.setAlignment(Qt.AlignmentFlag.AlignTop)  # Aligner en haut
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.history_widget)
+
+        # Ajouter la zone de l'historique au layout principal
+        main_layout.addWidget(scroll)
+
+        # Connexion des événements de la souris
+        self.canvas.mpl_connect('button_press_event', self.on_click)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
+        self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+
+        # Variables pour stocker les points cliqués
+        self.x1, self.y1 = None, None
+        self.x2, self.y2 = None, None
+
+        self.setLayout(main_layout)  # Définir le layout du QDialog
+
+    def SaveAzimuth(self):
+        remaining_angles = self.get_remaining_angles()
+        for start, end in remaining_angles:
+            self.azmask += list(np.argwhere(np.logical_and(self.Azimuth>=start, self.Azimuth<=end)))
+        self.Azimuth = self.Azimuth[self.azmask]
+        self.fig.clf()
+        self.canvas.flush_events()
+        plt.close(self.fig)
+        self.accept()
+
+    def draw_ellipse(self):
+        """Tracer l'ellipse à chaque mise à jour"""
+        self.ax.clear()
+        self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
+        self.ax.set_xlim(-self.img_width, self.img_width)
+        self.ax.set_ylim(-self.img_width, self.img_width)
+        
+        # Tracer les angles restants de l'ellipse
+        remaining_angles = self.get_remaining_angles()
+        # print(remaining_angles)
+        for start, end in remaining_angles:
+            theta = np.radians(np.arange(start, end+0.1, 1))
+            x = self.ellipse_width * np.cos(theta)
+            y = self.ellipse_height * np.sin(theta)
+            self.ax.plot(x, y, 'b')  # Tracer en bleu les portions restantes de l'ellipse
+
+        # Tracer les wedges supprimés
+        for wedge in self.removed_intervals:
+            self.ax.add_patch(wedge)
+
+        if self.current_wedge:
+            self.ax.add_patch(self.current_wedge)
+
+        # Assurer un affichage carré
+        self.ax.set_aspect('equal')
+        # self.ax.set_xlim(-6, 6)
+        # self.ax.set_ylim(-6, 6)  # carré, même échelle sur les axes
+        self.canvas.draw()
+
+    def get_remaining_angles(self):
+        """Retourner la liste des intervalles d'angles restants (azimutaux)"""
+        full_circle = [(0, 360)]  # L'ellipse entière
+        removed_intervals = [(w.theta1, w.theta2) for w in self.removed_intervals]
+
+        # Fonction pour soustraire un intervalle de la liste complète
+        def subtract_intervals(intervals, remove):
+            result = []
+            for start, end in intervals:
+                if remove[1] <= start or remove[0] >= end:
+                    # Pas de chevauchement
+                    result.append((start, end))
+                else:
+                    # Chevauchement, on découpe l'intervalle
+                    if remove[0] > start:
+                        result.append((start, remove[0]))
+                    if remove[1] < end:
+                        result.append((remove[1], end))
+            return result
+
+        # Appliquer toutes les suppressions d'angles
+        for remove in removed_intervals:
+            full_circle = subtract_intervals(full_circle, remove)
+
+        return full_circle
+
+    def on_click(self, event):
+        """Lorsque l'utilisateur clique sur la figure"""
+        self.x1, self.y1 = event.xdata, event.ydata
+        if self.x1 is not None and self.y1 is not None:
+            self.is_drawing = True  # Commencer à tracer l'arc
+
+    def on_release(self, event):
+        """Lorsque l'utilisateur relâche la souris"""
+        if self.is_drawing:
+            self.x2, self.y2 = event.xdata, event.ydata
+            if self.x1 is not None and self.y1 is not None and self.x2 is not None and self.y2 is not None:
+                # Calculer les angles d'azimut correspondants
+                angle1 = np.degrees(np.arctan2(self.y1, self.x1))
+                angle2 = np.degrees(np.arctan2(self.y2, self.x2))
+
+                # S'assurer que les angles sont dans le bon sens (0-360 degrés)
+                if angle1 < 0:
+                    angle1 += 360
+                if angle2 < 0:
+                    angle2 += 360
+
+                # Créer un wedge permanent entre ces deux angles
+                wedge = Wedge(self.ellipse_center, self.ellipse_width*1.5, angle1, angle2, color='red', alpha=0.3)
+                self.removed_intervals.append(wedge)
+                self.add_to_history(angle1, angle2)
+
+            # Réinitialiser le wedge temporaire et redessiner
+            self.current_wedge = None
+            self.is_drawing = False
+            self.draw_ellipse()
+
+    def on_motion(self, event):
+        """Lorsque l'utilisateur déplace la souris en maintenant le clic"""
+        if self.is_drawing and self.x1 is not None and self.y1 is not None and event.xdata is not None and event.ydata is not None:
+            # Calculer l'angle entre le point initial et le point actuel
+            angle1 = np.degrees(np.arctan2(self.y1, self.x1))
+            angle2 = np.degrees(np.arctan2(event.ydata, event.xdata))
+
+            if angle1 < 0:
+                angle1 += 360
+            if angle2 < 0:
+                angle2 += 360
+
+            # Mettre à jour le wedge temporaire
+            self.current_wedge = Wedge(self.ellipse_center, self.ellipse_width*1.5, angle1, angle2, color='red', alpha=0.3)
+            self.removed_angle.append(np.where)
+            # Redessiner la figure pour montrer le wedge en temps réel
+            self.draw_ellipse()
+
+    def add_to_history(self, angle1, angle2):
+        """Ajouter une suppression à l'historique avec un bouton d'annulation"""
+        hbox = QHBoxLayout()
+
+        label = QLabel(f"Suppression: {int(angle1)}° - {int(angle2)}°")
+        btn_remove = QPushButton("X")
+        btn_remove.clicked.connect(lambda: self.undo_removal(angle1, angle2, hbox))
+
+        hbox.addWidget(label)
+        hbox.addWidget(btn_remove)
+        self.history_layout.addLayout(hbox)
+
+    def undo_removal(self, angle1, angle2, hbox):
+        """Annuler une suppression d'azimut"""
+        # Retirer le wedge correspondant
+        self.removed_intervals = [w for w in self.removed_intervals if not (int(w.theta1) == int(angle1) and int(w.theta2) == int(angle2))]
+        # Supprimer l'entrée de l'historique
+        for i in reversed(range(hbox.count())):
+            hbox.itemAt(i).widget().deleteLater()
+        self.draw_ellipse()
+
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     ex = FileExplorerApp()
     ex.show()
-    sys.exit(app.exec_())
+    app.exec()

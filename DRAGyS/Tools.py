@@ -123,12 +123,8 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi, liste=None):
 
     return x, y
 
-def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, method='Azimuthal'):
+def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, method='Azimuthal'):
     X, Y  = [], []
-    min_X = []
-    max_X = []
-    min_Y = []
-    max_Y = []
     image = ndimage.gaussian_filter(image , sigma = gaussian_filter)
 
     if method == 'Diagonal':
@@ -152,28 +148,18 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
             peaks_find_down, _ = signal.find_peaks(flux_smooth_down, prominence=prominence, distance=distance, width=width, threshold=threshold) #, distance=d)
             
             for peak in (peaks_find_up):
-                range_pixel = MaxPixel_range(np.arange(len(flux_smooth_up)), np.exp(flux_smooth_up), peak, 3 * Noise, max=10)
                 x = dec + peak + w 
                 y = s   - peak + w 
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(dec + np.min(range_pixel) + w)
-                    max_X.append(dec + np.max(range_pixel) + w)
-                    min_Y.append(s   - np.min(range_pixel) + w)
-                    max_Y.append(s   - np.max(range_pixel) + w)
 
             for peak in (peaks_find_down):
-                range_pixel = MaxPixel_range(np.arange(len(flux_smooth_down)), np.exp(flux_smooth_down), peak, 3 * Noise, max=10)
                 x = peak + w
                 y = s - dec - peak - w
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(np.min(range_pixel) + w)
-                    max_X.append(np.max(range_pixel) + w)
-                    min_Y.append(s - dec - np.min(range_pixel) - w)
-                    max_Y.append(s - dec - np.max(range_pixel) - w)
     elif method == 'Antidiagonal':
         w = 0
         s = len(image)
@@ -188,27 +174,17 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
             peaks_find_down, _ = signal.find_peaks(flux_smooth_down, prominence=prominence, distance=distance, width=width, threshold=threshold) #, distance=d)
             
             for peak in (peaks_find_up):
-                range_pixel = MaxPixel_range(np.arange(len(flux_smooth_up)), np.exp(flux_smooth_up), peak, 3 * Noise, max=10)
                 x = peak
                 y = dec + peak
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(np.min(range_pixel))
-                    max_X.append(np.max(range_pixel))
-                    min_Y.append(dec + np.min(range_pixel))
-                    max_Y.append(dec + np.max(range_pixel))
             for peak in (peaks_find_down):
-                range_pixel = MaxPixel_range(np.arange(len(flux_smooth_down)), np.exp(flux_smooth_down), peak, 3 * Noise, max=10)
                 x = dec + peak
                 y = peak
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(dec + np.min(range_pixel))
-                    max_X.append(dec + np.min(range_pixel))
-                    min_Y.append(np.min(range_pixel))
-                    max_Y.append(np.max(range_pixel))
 
     elif method == 'Horizontal':
         s = len(image)
@@ -216,16 +192,11 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
             flux = moving_average(np.array(image[:, i]), smooth_filter)
             peaks_find  , _ = signal.find_peaks(flux,   prominence=prominence, distance=distance, width=width, threshold=threshold) #, distance=d)
             for peak in (peaks_find):
-                range_pixel = MaxPixel_range(np.arange(len(flux)), np.exp(flux), peak, 3 * Noise, max=10)
                 x = peak
                 y = i
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(np.min(range_pixel))
-                    max_X.append(np.max(range_pixel))
-                    min_Y.append(y)
-                    max_Y.append(y)
 
     elif method == 'Vertical':
         s = len(image)
@@ -233,16 +204,11 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
             flux = moving_average(np.array(image[i, :]), smooth_filter)
             peaks_find  , _ = signal.find_peaks(flux,   prominence=prominence, distance=distance, width=width, threshold=threshold) #, distance=d)
             for peak in (peaks_find):
-                range_pixel = MaxPixel_range(np.arange(len(flux)), np.exp(flux), peak, 3 * Noise, max=10)
                 x = i
                 y = peak
                 if Mincut_Radius <= np.sqrt((x-s/2)**2 + (y-s/2)**2) <= Maxcut_Radius:
                     X.append(x)
                     Y.append(y)
-                    min_X.append(x - 1)
-                    max_X.append(x + 1)
-                    min_Y.append(np.min(range_pixel))
-                    max_Y.append(np.max(range_pixel))
     
     elif method == 'Azimuthal':
         Phi = np.radians(np.linspace(0, 359, 360))
@@ -254,30 +220,24 @@ def Max_pixel(image, xmin, xmax, Noise, R_max=None, gaussian_filter=3, smooth_fi
             x = list(map(int, len(image)/2 + R*np.sin(phi)))
             y = list(map(int, len(image)/2 + R*np.cos(phi)))
             Flux    = image[x, y]
+
             flux = np.log(Flux)
             flux_smooth = moving_average(np.array(flux), smooth_filter)
             peaks_find, _ = signal.find_peaks(flux_smooth, prominence=prominence, distance=distance, width=width, threshold=threshold) #, distance=d)
-            for peak in peaks_find:
-                range_pixel = MaxPixel_range(np.arange(len(flux_smooth)), np.exp(flux_smooth), peak, 3 * Noise, max=10)
-                
+            for peak in peaks_find:                
                 X.append(len(image)/2 + (Mincut_Radius + peak)*np.sin(phi))
                 Y.append(len(image)/2 + (Mincut_Radius + peak)*np.cos(phi))
-                min_X.append(len(image)/2 + (Mincut_Radius + (np.min(range_pixel)))*np.sin(phi))
-                max_X.append(len(image)/2 + (Mincut_Radius + (np.max(range_pixel)))*np.sin(phi))
-                min_Y.append(len(image)/2 + (Mincut_Radius + (np.min(range_pixel)))*np.cos(phi))
-                max_Y.append(len(image)/2 + (Mincut_Radius + (np.max(range_pixel)))*np.cos(phi))
-    return X, Y, min_X, max_X, min_Y, max_Y
+    return X, Y
 
 def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb, filename, Tsigma=1):
-    ## Compute Values of Inclination, Position angle, and Scale Height
     coeffs = fit_ellipse(np.array(X), np.array(Y))
     Xc, Yc, a, b, e, PA_LSQE = cart_to_pol(coeffs)
 
     inclination   = np.arccos(b/a)
     PositionAngle = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
     X_e, Y_e      = get_ellipse_pts((Xc, Yc, a, b, e, PositionAngle))
-    # Height        = Height_Compute(X_e, Y_e, x0, y0)/np.sin(inclination)
-    Height        = np.sqrt((x0-Xc)**2 + (y0-Yc)**2)/np.sin(inclination)
+    Height        = Height_Compute(X_e, Y_e, x0, y0)/np.sin(inclination)
+    # Height        = np.sqrt((x0-Xc)**2 + (y0-Yc)**2)/np.sin(inclination)
     # m, c = 0.1708257, -0.24881799
     # Height        = Height * (m+1) + c
     Radius        = a
@@ -321,10 +281,18 @@ def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb, filename, Tsigma=
                        "Err"        : [Error_Inclination, Error_Radius, Error_Height, Error_Aspect, 0, Error_PositionAngle], 
                        'Points'     : [X, Y, x_min, x_max, y_min, y_max], 
                        "Ellipse"    : [Xc, Yc, X_e, Y_e, a, b, e]}
+    
     GUI_Folder, Fitting_Folder, SPF_Folder = Init_Folders()
     with open(f"{Fitting_Folder}/{filename}", 'wb') as fichier:
         pickle.dump(Data_to_Save, fichier)
-    
+
+def Random_Ellipse(Radius, Phi, xs, ys, xe, ye, incl, R, H, Aspect, Chi, PA):
+    x     = Radius * np.sin(Phi)
+    y     = H * (Radius/R)**Chi * np.sin(incl) - Radius * np.cos(Phi) * np.cos(incl)
+    x_rot = xs + (x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA))
+    y_rot = ys + (x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA))
+    return x_rot, y_rot
+
 def BeamSpace(Radius, r_beam, PA, incl, aspect, alpha):
     Beam_X, Beam_Y, Beam_Phi= [], [], []
     for R in Radius :
@@ -440,23 +408,6 @@ def moving_average(data, window_size):
     smoothed_data = np.convolve(data, np.ones(window_size)/window_size, mode='same')
     return smoothed_data
 
-def MaxPixel_range(x, y, peak, Noise, max=10):
-    seuil = y[peak] - Noise
-    n = 0
-    m = 0
-    while peak - n > 0 and y[peak - n] >= seuil :
-        if n >= max:
-            break
-        n += 1
-    while peak + m < len(y) and y[peak + m] >= seuil :
-        m += 1
-        if m >= max:
-            break
-    if n==0 and m==0 :
-        range = [peak]
-    else :
-        range = x[peak-n:peak+m]
-    return range
 # =======================================================================================
 # =================================== Normalization =====================================
 # =======================================================================================
@@ -513,8 +464,7 @@ def MCFOST_PhaseFunction(file_path, Name, Normalization):
 
     return MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, MCFOST_Err_I, MCFOST_Err_PI, MCFOST_Err_DoP
 
-def NewScatt(R, ellipse_center, star=(0, 0)):
-    Phi    = np.radians(np.linspace(0, 359, 360))
+def NewScatt(R, ellipse_center, Phi, star=(0, 0)):
     xs, ys = star
     xc, yc = ellipse_center
     xp, yp = xc + R * np.cos(Phi), yc + R * np.sin(Phi)
@@ -544,6 +494,17 @@ def angle_oriente_2d(v1, v2):
         oriented = no_oriented
     return oriented
 
+def angle_oriente(u, v):
+    dot_product = np.dot(u, v)
+    norm_u = np.linalg.norm(u)
+    norm_v = np.linalg.norm(v)
+    
+    cross_product = u[0] * v[1] - u[1] * v[0]
+    angle_radians = np.arctan2(cross_product, dot_product)
+    angle_degrees = np.degrees(angle_radians)
+    
+    return angle_degrees
+
 def Orthogonal_Prejection(star_position, ellipse_center, PA):
     (xs, ys) = star_position
     (xc, yc) = ellipse_center
@@ -554,7 +515,7 @@ def Orthogonal_Prejection(star_position, ellipse_center, PA):
     yc_prime = ys + t * b
     return xc_prime, yc_prime
 
-def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA):
+def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     (xs, ys) = star_position
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
@@ -581,10 +542,10 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA):
     elif -np.pi/2 > angle:
         D =   np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
     # D = - np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
-    New_Phi = NewScatt(R, (xs + D, ys), star=(xs, ys))
+    New_Phi = NewScatt(R, (xs + D, ys), Phi, star=(xs, ys))
     return New_Phi, xc_prime, yc_prime
 
-def Get_PhF(filename, side='All'):
+def Get_PhF(filename, side='All', LBCorrected=False, norm='none'):
     with open(filename, 'rb') as fichier:
         Loaded_Data = pickle.load(fichier)
     Scatt     = np.array(Loaded_Data[side]["Scatt"])
@@ -595,9 +556,22 @@ def Get_PhF(filename, side='All'):
     Err_PI    = np.array(Loaded_Data[side]["Err_PI"])
     LB        = np.array(Loaded_Data[side]["LB"])
     Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
-    return Scatt, I, PI, Err_Scatt, Err_I, Err_PI, LB, Err_LB
+    
+    if LBCorrected:
+        I  = I/LB
+        PI = PI/LB
+        Err_I  = I  * np.sqrt((Err_I/I)**2   + (Err_LB/LB)**2)
+        Err_PI = PI * np.sqrt((Err_PI/PI)**2 + (Err_LB/LB)**2)
 
-def Get_SPF(filename, side='All'):          # Not Used Yet
+    if norm=='90':
+        normI  = np.interp(90, Scatt, I)
+        normPI = np.interp(90, Scatt, PI)
+    else :
+        normI = normPI = 1
+
+    return Scatt, I/normI, PI/normPI, Err_Scatt, Err_I/normI, Err_PI/normPI, LB, Err_LB
+
+def Get_SPF(filename, side='All', LBCorrected=False, norm='none'):          # Not Used Yet
     with open(filename, 'rb') as fichier:
         Loaded_Data = pickle.load(fichier)
     Scatt     = np.array(Loaded_Data[side]["Scatt"])
@@ -606,7 +580,11 @@ def Get_SPF(filename, side='All'):          # Not Used Yet
     Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
     LB        = np.array(Loaded_Data[side]["LB"])
     Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
-    return Scatt, SPF, LB, Err_Scatt, Err_SPF, Err_LB
+    if LBCorrected:
+        SPF  = SPF/LB
+        Err_SPF = SPF * np.sqrt((Err_SPF/SPF)**2 + (Err_LB/LB)**2)
+    Norm = np.interp(90, Scatt, SPF) if norm=='90' else 1
+    return Scatt, SPF/Norm, LB, Err_Scatt, Err_SPF/Norm, Err_LB
 
 def Remove_LB(Scatt, Flux, Err_Flux, incl, aspect, chi):
     LB_effect = (np.cos(aspect) * np.sin(aspect*chi-aspect)) / (np.cos(aspect)*np.sin(aspect*chi-aspect) + np.cos(incl)*np.cos(aspect*chi-aspect) - np.sin(aspect*chi)*np.cos(np.radians(Scatt)))
@@ -706,12 +684,10 @@ def Get_Distance(Distances, Path):
     hdu = fits.open(Folder + File)
     header = hdu[0].header
     if 'TARGET' in header: 
-        # print(header['TARGET'], Distances[header['TARGET']])
         return Distances[header['TARGET']]
     else :
         for keys in Distances.keys():
             KEYS = keys.replace(' ', '').replace('_', '').replace('-', '').upper()
             if KEYS in FILE :
-                # print(keys, '-', Distances[keys])
                 return Distances[keys]
 

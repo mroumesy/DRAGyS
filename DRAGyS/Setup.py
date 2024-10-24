@@ -10,7 +10,7 @@ def install_package(package_name):
         print(f"'{package_name}' not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
 
-for package_name in ['pickle', 'PyQt5', 'scipy', 'astropy', "multiprocess"]:
+for package_name in ['pickle', 'PyQt6', 'scipy', 'astropy', "multiprocess"]:
     install_package(package_name)
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox
