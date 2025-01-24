@@ -7,19 +7,20 @@ from multiprocessing import Pool
 import pickle as pkl
 
 def SPF(params):
-    [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl, D_R_ref, D_H_ref, D_aspect, R_in, R_out, n_bin, Phi, Type] = params
+    [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Type] = params    
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
 
+    # print("Compute SPF on intensity, for Fitting : \ni   = {:.2f}°  +/- {:.2f}° \nPA  = {:.2f}° +/- {:.2f}° \nh   = {:.2f}   +/- {:.2f} \nr   = {:.2f}  +/- {:.2f} \nh/r = {:.3f} +/- {:.3f} \nR   = {:.2f} - {:.2f} au \nd   = {:.1f} pc \npix = {:.6f}".format(np.degrees(incl), np.degrees(D_incl), np.degrees(PA), 0.0, H_ref, D_H_ref, R_ref, D_R_ref, aspect, D_aspect, R_in, R_out, distance, pixelscale))
     R_ref = R_ref/pixelscale_au
     H_ref = H_ref/pixelscale_au
     aspect = H_ref/R_ref
     
-    nb_radius = int((R_out - R_in)/pixelscale_au) + 5
+    nb_radius = round((R_out - R_in)/pixelscale_au) + 5
     Phi = np.radians(Phi)
     Angle,      Flux      = [], []
     Angle_east, Flux_east = [], []
     Angle_west, Flux_west = [], []
-    already_used_pixels = []
+    already_used_pixels   = []
 
     size = len(img)/2
     Side = np.zeros_like(img)
@@ -40,17 +41,17 @@ def SPF(params):
             y     = H_ref * (R/R_ref)**alpha * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
             x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
             y_rot = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
-            if (int(x_rot), int(y_rot)) not in already_used_pixels:
+            if (round(x_rot), round(y_rot)) not in already_used_pixels:
                 sca = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
-                if Side[int(x_rot), int(y_rot)] == 1:
+                if Side[round(x_rot), round(y_rot)] == 1:
                     Angle_east.append(np.degrees(sca))
-                    Flux_east.append(img[int(x_rot), int(y_rot)])
+                    Flux_east.append(img[round(x_rot), round(y_rot)])
                 else :
                     Angle_west.append(np.degrees(sca))
-                    Flux_west.append(img[int(x_rot), int(y_rot)])
-                Flux.append(img[int(x_rot), int(y_rot)])
+                    Flux_west.append(img[round(x_rot), round(y_rot)])
+                Flux.append(img[round(x_rot), round(y_rot)])
                 Angle.append(np.degrees(sca))
-                already_used_pixels.append((int(x_rot), int(y_rot)))
+                already_used_pixels.append((round(x_rot), round(y_rot)))
                 
     Angle,      Flux      = np.array(Angle),      np.array(Flux)
     Angle_east, Flux_east = np.array(Angle_east), np.array(Flux_east)
@@ -65,6 +66,7 @@ def SPF(params):
     SPF_west, D_SPF_west       = [], []
 
     bin_Scatt = np.linspace(0, 180, n_bin+1)
+    # bin_Scatt = np.linspace(np.min(Angle), np.max(Angle), n_bin+1)
 
     for idx in range(n_bin):
         mask      = np.where(np.logical_and(Angle      >= bin_Scatt[idx], Angle      < bin_Scatt[idx+1]))
@@ -72,25 +74,25 @@ def SPF(params):
         mask_west = np.where(np.logical_and(Angle_west >= bin_Scatt[idx], Angle_west < bin_Scatt[idx+1]))
         if len(mask[0])!=0:
             Scatt.append(np.nanmean(Angle[mask]))
-            D_Scatt.append(np.nanstd(Angle[mask]))
-            # D_Scatt.append(np.nanstd(Angle[mask])/len(Angle[mask]))
+            # D_Scatt.append(np.nanstd(Angle[mask]))
+            D_Scatt.append(np.nanstd(Angle[mask])/len(Angle[mask]))
             SPF.append(np.nanmean(Flux[mask]))
-            # D_SPF.append(np.nanstd(Flux[mask])/len(Flux[mask]))
-            D_SPF.append(np.nanstd(Flux[mask]))
+            D_SPF.append(np.nanstd(Flux[mask])/len(Flux[mask]))
+            # D_SPF.append(np.nanstd(Flux[mask]))
         if len(mask_east[0]) != 0:
             Scatt_east.append(np.nanmean(Angle_east[mask_east]))
-            # D_Scatt_east.append(np.nanstd(Angle_east[mask_east])/len(Angle_east[mask_east]))
-            D_Scatt_east.append(np.nanstd(Angle_east[mask_east]))
+            D_Scatt_east.append(np.nanstd(Angle_east[mask_east])/len(Angle_east[mask_east]))
+            # D_Scatt_east.append(np.nanstd(Angle_east[mask_east]))
             SPF_east.append(np.nanmean(Flux_east[mask_east]))
-            # D_SPF_east.append(np.nanstd(Flux_east[mask_east])/len(Flux_east[mask_east]))
-            D_SPF_east.append(np.nanstd(Flux_east[mask_east]))
+            D_SPF_east.append(np.nanstd(Flux_east[mask_east])/len(Flux_east[mask_east]))
+            # D_SPF_east.append(np.nanstd(Flux_east[mask_east]))
         if len(mask_west[0]) != 0:
             Scatt_west.append(np.nanmean(Angle_west[mask_west]))
-            # D_Scatt_west.append(np.nanstd(Angle_west[mask_west])/len(Angle_west[mask_west]))
-            D_Scatt_west.append(np.nanstd(Angle_west[mask_west]))
+            D_Scatt_west.append(np.nanstd(Angle_west[mask_west])/len(Angle_west[mask_west]))
+            # D_Scatt_west.append(np.nanstd(Angle_west[mask_west]))
             SPF_west.append(np.nanmean(Flux_west[mask_west]))
-            # D_SPF_west.append(np.nanstd(Flux_west[mask_west])/len(Flux_west[mask_west]))
-            D_SPF_west.append(np.nanstd(Flux_west[mask_west]))
+            D_SPF_west.append(np.nanstd(Flux_west[mask_west])/len(Flux_west[mask_west]))
+            # D_SPF_west.append(np.nanstd(Flux_west[mask_west]))
 
     if alpha == 1:
         chi = 1.00001
@@ -170,7 +172,7 @@ def New_Beam_pSPF(params):
             x = Beam_Y[idx][jdx] + size
             sca  = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
             mask = Tools.create_circular_mask(X, Y, (y, x), range_R/2)
-            if Side[int(x), int(y)] == 1:
+            if Side[round(x), round(y)] == 1:
                 Angle_east.append(np.degrees(sca))
                 TotI_east.append(np.nanmean(img_I[mask]))
                 PolarI_east.append(np.nanmean(img_PI[mask]))

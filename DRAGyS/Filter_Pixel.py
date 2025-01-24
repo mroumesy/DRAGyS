@@ -9,34 +9,52 @@ from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.patches import Rectangle
 from scipy import ndimage
+from ellipse import LsqEllipse
 import pickle as pkl
 import Tools
+from matplotlib.path import Path
+from matplotlib.patches import Polygon
+from matplotlib.figure import Figure
+
 
 
 
 class FilteringWindow(QDialog):
-    def __init__(self, disk_name, image, threshold, x_min, x_max, parent=None):
+    def __init__(self, disk_name, img_name, image, threshold, x_min, x_max, r_beam, parent=None):
         super(FilteringWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         self.resize(1000, 600)
-        # self.setFixedSize(1500, 900)
-        self.nb_steps = 10000
+        self.nb_steps = 1000
         self.disk_name = disk_name
+
+        # diam = 8.2
+        # lam  = 1.6e-6
+        # pixelscale = 0.01225
+        # psf_FWHM  = 1.03 * (lam/diam) * 180/np.pi * 3600
+        # sigma_psf = psf_FWHM / (2*pixelscale * np.sqrt(2*np.log(2)))
+        # self.image = ndimage.gaussian_filter(image, sigma_psf)
         self.image = image
+
+        self.img_name  = img_name
         self.Lim_Radius = int(len(image)/2 - 1)
         self.threshold = threshold
         self.x_min, self.x_max = x_min, x_max
         self.R_max = int(x_max - len(self.image)/2)
+        self.r_beam = r_beam
         self.initUI()
 
     def initUI(self):
         self.setWindowTitle('Filtering Pixel position Data Window')
-
-        self.Filtering_Fig, self.Filtering_ax = plt.subplots(1, 1, num="Filtering Data")
+        try:
+            self.Filtering_Fig.clear()  # Nettoyer la figure
+        except:
+            Tool_Could_Also_be_named = 'DRAGyS'
+        self.Filtering_Fig = Figure()
+        self.Filtering_ax  = self.Filtering_Fig.add_subplot(111)
+        # self.Filtering_Fig, self.Filtering_ax = plt.subplots(1, 1, num="Filtering Data")
         self.Filtering_Canvas = FigureCanvas(self.Filtering_Fig)
         self.Filtering_Canvas.setParent(self)
         
-
         close_button = QPushButton('Save Data - Close', self)
         close_button.clicked.connect(self.Continue)
         close_button.setFixedHeight(40)
@@ -45,6 +63,7 @@ class FilteringWindow(QDialog):
         self.Filtering_Canvas.mpl_connect('button_press_event', self.on_press)
         self.Filtering_Canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.Filtering_Canvas.mpl_connect('button_release_event', self.on_release)
+
 
         # Ajoutez un slider pour le zoom
         self.Gaussian_Label  = QLabel("Gaussian Filter Parameter : ", self)
@@ -90,8 +109,8 @@ class FilteringWindow(QDialog):
         self.Prominence_slider = QSlider(Qt.Orientation.Horizontal)
         self.Prominence_slider.setMinimum(-500)
         self.Prominence_slider.setMaximum(500)
-        self.Prominence_slider.setValue(0)
-        self.Prominence_value = 10**(0/100)
+        self.Prominence_slider.setValue(-100)
+        self.Prominence_value = 10**(-100/100)
         self.Prominence_value_Label = QLabel(str(self.Prominence_value))
         self.Prominence_slider.setSingleStep(1)
         self.Prominence_slider.setTickPosition(QSlider.TickPosition.NoTicks)
@@ -103,8 +122,8 @@ class FilteringWindow(QDialog):
         self.Width_slider = QSlider(Qt.Orientation.Horizontal)
         self.Width_slider.setMinimum(1)
         self.Width_slider.setMaximum(10000)
-        self.Width_slider.setValue(100)
-        self.Width_value = 0.1
+        self.Width_slider.setValue(5000)
+        self.Width_value = 5
         self.Width_value_Label = QLabel(str(self.Width_value))
         self.Width_slider.setSingleStep(1)
         self.Width_slider.setTickPosition(QSlider.TickPosition.NoTicks)
@@ -114,10 +133,10 @@ class FilteringWindow(QDialog):
 
         self.HighPass_Label  = QLabel("High Pass Parameter : ", self)
         self.HighPass_slider = QSlider(Qt.Orientation.Horizontal)
-        self.HighPass_slider.setMinimum(10)
+        self.HighPass_slider.setMinimum(0)
         self.HighPass_slider.setMaximum(1000)
-        self.HighPass_slider.setValue(10)
-        self.HighPass_value = 21
+        self.HighPass_slider.setValue(0)
+        self.HighPass_value = 1
         self.HighPass_value_Label = QLabel(str(self.HighPass_value))
         self.HighPass_slider.setSingleStep(1)
         self.HighPass_slider.setTickPosition(QSlider.TickPosition.NoTicks)
@@ -142,14 +161,30 @@ class FilteringWindow(QDialog):
         self.MaxCutRad_slider = QSlider(Qt.Orientation.Horizontal)
         self.MaxCutRad_slider.setMinimum(1)
         self.MaxCutRad_slider.setMaximum(self.Lim_Radius)
-        self.MaxCutRad_slider.setValue(100)
-        self.MaxCutRad_value = 100
+        # self.MaxCutRad_slider.setValue(158)
+        # self.MaxCutRad_value = 158
+        self.MaxCutRad_slider.setValue(self.Lim_Radius)
+        self.MaxCutRad_value = self.Lim_Radius
         self.MaxCutRad_value_Label = QLabel(str(self.MaxCutRad_value))
         self.MaxCutRad_slider.setSingleStep(1)
         self.MaxCutRad_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.MaxCutRad_Label.setFixedWidth(200)
         self.MaxCutRad_value_Label.setFixedWidth(100)
         self.MaxCutRad_slider.setFixedWidth(300)
+
+        self.NbAzimuth_Label  = QLabel("nb azimuth : ", self)
+        self.NbAzimuth_slider = QSlider(Qt.Orientation.Horizontal)
+        self.NbAzimuth_slider.setMinimum(10)
+        self.NbAzimuth_slider.setMaximum(360)
+        self.NbAzimuth_slider.setValue(90)
+        self.NbAzimuth_value = 90
+        self.NbAzimuth_value_Label = QLabel(str(self.NbAzimuth_value))
+        self.NbAzimuth_slider.setSingleStep(10)
+        self.NbAzimuth_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.NbAzimuth_Label.setFixedWidth(200)
+        self.NbAzimuth_value_Label.setFixedWidth(100)
+        self.NbAzimuth_slider.setFixedWidth(300)
+
 
         self.Azimuthal_Method    = QPushButton("Azimutal Cut", self)
         self.Diagonal_Method     = QPushButton("Diagonal Cut", self)
@@ -171,6 +206,7 @@ class FilteringWindow(QDialog):
         self.HighPass_slider.valueChanged.connect(lambda   value : self.Change_Fit(value, Type='HighPass'))
         self.MinCutRad_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='MinCutRad'))
         self.MaxCutRad_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='MaxCutRad'))
+        self.NbAzimuth_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='NbAzimuth'))
         self.Azimuthal_Method.clicked.connect(lambda       value : self.Change_Fit(0, Type='Azimuthal'))
         self.Diagonal_Method.clicked.connect(lambda        value : self.Change_Fit(0, Type='Diagonal'))
         self.Antidiagonal_Method.clicked.connect(lambda    value : self.Change_Fit(0, Type='Antidiagonal'))
@@ -192,6 +228,8 @@ class FilteringWindow(QDialog):
         self.MinCutRad_value_Label.setFixedHeight(10)
         self.MaxCutRad_Label.setFixedHeight(10)
         self.MaxCutRad_value_Label.setFixedHeight(10)
+        self.NbAzimuth_Label.setFixedHeight(10)
+        self.NbAzimuth_value_Label.setFixedHeight(10)
 
         self.Azimuthal_Method.setFixedHeight(25)
         self.Diagonal_Method.setFixedHeight(25)
@@ -267,6 +305,12 @@ class FilteringWindow(QDialog):
         Filtering_Layout.addLayout(MaxCutLayout)
         Filtering_Layout.addWidget(self.MaxCutRad_slider)
 
+        NbAzimuthLayout = QHBoxLayout()
+        NbAzimuthLayout.addWidget(self.NbAzimuth_Label)
+        NbAzimuthLayout.addWidget(self.NbAzimuth_value_Label)
+        Filtering_Layout.addLayout(NbAzimuthLayout)
+        Filtering_Layout.addWidget(self.NbAzimuth_slider)
+
         Filtering_Layout.addLayout(MethodButton)
         Filtering_Layout.addWidget(close_button)
         Filtering_Layout.addWidget(self.progress)
@@ -285,26 +329,33 @@ class FilteringWindow(QDialog):
         self.rect_start = None
         self.rect_preview = None
         X, Y = Tools.Max_pixel(self.image, R_max=self.R_max, gaussian_filter=self.gaussian_value, smooth_filter=self.smooth_value)
-        self.X = np.array(X)
-        self.Y = np.array(Y)
+        self.is_drawing  = False
+        self.line        = None
+        self.points      = []  # Liste pour stocker les points du tracé en cours
+        self.point_All   = np.column_stack((Y, X))
+        self.point_cloud = np.column_stack((Y, X))
+        
+        # self.X = np.array(X)
+        # self.Y = np.array(Y)
+        # self.AllPoints = list(zip(self.X, self.Y))
         self.Filtering_ax.set_facecolor('k')
-        self.displayed_image = self.Filtering_ax.imshow(self.image, cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.threshold))
+        self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
         self.Filtering_ax.set_xlim(self.x_min, self.x_max)
         self.Filtering_ax.set_ylim(self.x_min, self.x_max)
-        self.Data = self.Filtering_ax.scatter(self.Y, self.X, edgecolor='k', color='cyan', s=5)
+        self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
         self.Change_Fit(1, 'None')
 
-        self.X_rect_press   = []
-        self.Y_rect_press   = []
-        self.X_rect_release = []
-        self.Y_rect_release = []
+        # self.X_rect_press   = []
+        # self.Y_rect_press   = []
+        # self.X_rect_release = []
+        # self.Y_rect_release = []
 
     def Change_Fit(self, value, Type):
         if Type=='Gaussian':
             self.gaussian_value = value /100
             self.Gaussian_value_Label.setText(str(self.gaussian_value))
             self.displayed_image.remove()
-            self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.threshold))
+            self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
 
         elif Type=='Smooth':
             self.smooth_value = value
@@ -338,10 +389,12 @@ class FilteringWindow(QDialog):
                 self.MinCutRad_value = value - 1
                 self.MinCutRad_slider.setValue(value-1)
                 self.MinCutRad_value_Label.setText(str(self.MinCutRad_value))
-            
+        elif Type=='NbAzimuth':
+            self.NbAzimuth_value = value
+            self.NbAzimuth_value_Label.setText(str(self.NbAzimuth_value))
         elif Type=="Azimuthal" or Type=='Diagonal' or Type=='Antidiagonal' or Type=='Vertical' or Type=='Horizontal':
             self.Method_Value = Type
-        self.Data.remove()
+        self.scatter.remove()
         X, Y = Tools.Max_pixel(self.image, R_max = self.R_max,  gaussian_filter = self.gaussian_value, 
                                                                 smooth_filter   = self.smooth_value, 
                                                                 prominence      = self.Prominence_value, 
@@ -351,73 +404,129 @@ class FilteringWindow(QDialog):
                                                                 HighPass        = self.HighPass_value,
                                                                 Mincut_Radius   = self.MinCutRad_value,
                                                                 Maxcut_Radius   = self.MaxCutRad_value,
+                                                                nb_phi          = self.NbAzimuth_value,
                                                                 method          = self.Method_Value)
-        self.X = np.array(X)
-        self.Y = np.array(Y)
-        self.Data = self.Filtering_ax.scatter(self.Y, self.X, edgecolor='k', color='cyan', s=5)
+        self.point_All   = np.column_stack((Y, X))
+        self.point_cloud = np.column_stack((Y, X))
+        # self.AllPoints = list(zip(self.X, self.Y))
+        self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
         self.Filtering_Canvas.draw()
 
     def on_press(self, event):
-        if event.inaxes == self.Filtering_ax:
-            self.x_press, self.y_press = event.xdata, event.ydata
-            self.X_rect_press.append(self.x_press)
-            self.Y_rect_press.append(self.y_press)
-            self.rect_start = (self.x_press, self.y_press)
-            self.rect_preview = Rectangle((self.x_press, self.y_press), 0, 0, edgecolor='navy', facecolor='blue', alpha=0.2)
-            self.Filtering_ax.add_patch(self.rect_preview)
-            self.Filtering_Canvas.draw()
-
-    def on_motion(self, event):
-        if self.rect_start is not None and event.inaxes == self.Filtering_ax:
-            x, y = event.xdata, event.ydata
-            width = x - self.rect_start[0]
-            height = y - self.rect_start[1]
-            self.rect_preview.set_width(width)
-            self.rect_preview.set_height(height)
-            self.Filtering_Canvas.draw()
+        """Commencer un nouveau tracé lorsque le bouton de la souris est enfoncé"""
+        self.is_drawing = True
+        self.points = [(event.xdata, event.ydata)]  # Initialiser avec le premier point
 
     def on_release(self, event):
-        if self.rect_start is not None and event.inaxes == self.Filtering_ax:
-            self.x_release, self.y_release = event.xdata, event.ydata
-            self.X_rect_release.append(self.x_release)
-            self.Y_rect_release.append(self.y_release)
-            y1 = min(self.x_press, self.x_release)
-            y2 = max(self.x_press, self.x_release)
-            x1 = min(self.y_press, self.y_release)
-            x2 = max(self.y_press, self.y_release)
+        """Terminer le tracé lorsque le bouton de la souris est relâché"""
+        self.is_drawing = False
 
-            b = np.where(np.logical_or(np.logical_or(self.X<x1, self.X>x2), np.logical_or(self.Y<y1, self.Y>y2)))
-            self.X = self.X[b]
-            self.Y = self.Y[b]
-            self.Data.remove()
-            self.Data = self.Filtering_ax.scatter(self.Y, self.X, edgecolor='k', color='cyan', s=5)
-            self.rect_preview.remove()
+        if len(self.points) > 2:  # S'assurer qu'il y a au moins 3 points pour former une zone
+            # Ajouter le point de départ pour fermer la forme si nécessaire
+            if self.points[0] != self.points[-1]:
+                self.points.append(self.points[0])  # Fermer la forme
 
+            # Créer et ajouter le polygone temporairement pour détection
+            polygon = Polygon(self.points, closed=True, color='red', alpha=0.3)
+            self.Filtering_ax.add_patch(polygon)
+            self.Filtering_Canvas.draw()
 
-        self.rect_start = None
-        self.rect_preview = None
+            # Supprimer les points à l'intérieur de la forme
+            self.remove_points_in_polygon(self.points)
+
+            # Supprimer le polygone de la figure
+            polygon.remove()
+
+            # Supprimer également la ligne noire du tracé
+            if self.line:
+                self.line.remove()
+                self.line = None
+
+        # Réinitialiser pour un nouveau tracé et mettre à jour l'affichage
+        self.points = []
         self.Filtering_Canvas.draw()
 
-    def Continue(self):
-        Fit_Name = 'Fitting_' + self.disk_name +'.pkl'
-        x0 = y0 = int(len(self.image)/2)
+    def on_motion(self, event):
+        """Tracer en continu pendant que la souris se déplace"""
+        if self.is_drawing and event.xdata is not None and event.ydata is not None:
+            # Ajouter le point actuel à la liste
+            self.points.append((event.xdata, event.ydata))
 
-        coeffs = Tools.fit_ellipse(np.array(self.X), np.array(self.Y))
+            # Afficher le tracé temporaire pour voir la forme en cours
+            if self.line:
+                self.line.remove()  # Supprimer le tracé précédent
+            self.line, = self.Filtering_ax.plot([p[0] for p in self.points], [p[1] for p in self.points], color='papayawhip')
+            self.Filtering_Canvas.draw()
+
+    def remove_points_in_polygon(self, polygon_points):
+        """Supprimer les points du nuage qui se trouvent dans le polygone dessiné."""
+        # Convertir les points du polygone en un objet Path pour la vérification
+        path = Path(polygon_points)
+        
+        # Déterminer quels points du nuage sont dans le polygone
+        inside = path.contains_points(self.point_cloud)
+        
+        # Garder uniquement les points qui sont à l'extérieur du polygone
+        self.point_cloud = self.point_cloud[~inside]
+        
+        # Mettre à jour l'affichage du nuage de points
+        self.scatter.set_offsets(self.point_cloud)
+
+    def Continue(self):
+        Fit_Name     = f'Fitting_{self.disk_name}_{self.img_name}.pkl'
+        # Fit_Name = f'Fitting_{self.disk_name}_{self.img_name}_naz{self.NbAzimuth_value}.pkl'
+        x0 = y0      = int(len(self.image)/2)
+        X, Y         = self.point_cloud[:, 1], self.point_cloud[:, 0]
+        All_X, All_Y = self.point_All[:, 1], self.point_All[:, 0]
+        coeffs       = Tools.fit_ellipse(np.array(X), np.array(Y))
         Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
 
-        incl     = np.arccos(b/a)
-        PA       = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
-        X_e, Y_e = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
-        H        = Tools.Height_Compute(X_e, Y_e, x0, y0)/np.sin(incl)
-        R        = a
-        Aspect   = H/R
-        Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e]
+        incl           = np.arccos(b/a)
+        PA             = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+        X_e, Y_e       = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
+        D              = Tools.Height_Compute(X_e, Y_e, x0, y0)
+        # D              = np.sqrt((Xc - x0)**2 + (Yc - y0)**2)
+        H              = D / np.sin(incl)
+        R              = a
+        Aspect         = H/R
+
+        First_Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e]
+        First_Estimation     = [incl, R, H, Aspect, 1, PA]
+
+
+        X_unif, Y_unif = Tools.uniform_ellipse(incl, PA, H, R, 1, R, self.r_beam, x0=x0, y0=y0, init=0)
+        X = []
+        Y = []
+        ny = nx = len(self.image)
+        mapy, mapx = np.indices((ny, nx))
+        for idx in range(len(X_unif)):
+            mask                  = (mapx - X_unif[idx]) ** 2 + (mapy - Y_unif[idx]) ** 2 <= self.r_beam ** 2
+            intensities_in_circle = self.image[mask]
+            max_index             = np.argmax(intensities_in_circle)
+            mask_indices          = np.where(mask)
+            max_y, max_x          = mask_indices[0][max_index], mask_indices[1][max_index]
+            X.append(max_y)
+            Y.append(max_x)
+        X = np.array(X)
+        Y = np.array(Y)
+
+        coeffs                   = Tools.fit_ellipse(X, Y)
+        Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+        incl                     = np.arccos(b/a)
+        PA                       = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+        X_e, Y_e                 = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
+        D                        = Tools.Height_Compute(X_e, Y_e, x0, y0)
+        # D                        = np.sqrt((Xc - x0)**2 + (Yc - y0)**2)
+        H                        = D / np.sin(incl)
+        R                        = a
+        Aspect                   = H/R
+        Ellipse_points           = [Xc, Yc, X_e, Y_e, a, b, e]
 
         Point_Offset = []
-        for idx in range(len(self.X)):
-            idx_dist     = np.argmin(np.sqrt((X_e - self.X[idx])**2 + (Y_e - self.Y[idx])**2))
+        for idx in range(len(X)):
+            idx_dist     = np.argmin(np.sqrt((X_e - X[idx])**2 + (Y_e - Y[idx])**2))
             ellipse_dist = np.sqrt((Xc - X_e[idx_dist])**2 + (Yc - Y_e[idx_dist])**2)
-            point_dist   = np.sqrt((Xc - self.X[idx])**2        + (Yc - self.Y[idx])**2)
+            point_dist   = np.sqrt((Xc - X[idx])**2        + (Yc - Y[idx])**2)
             dist         = ellipse_dist - point_dist
             Point_Offset.append(dist)
         
@@ -433,10 +542,16 @@ class FilteringWindow(QDialog):
             Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, Xc, Yc, incl, R, H, Aspect, 1, PA)
             coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
             Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
-            Inclinations.append(np.arccos(b/a))
+            D_inclinations = np.arccos(b/a)
+            Inclinations.append(D_inclinations)
             PositionAngles.append(Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE))
-            # X_e, Y_e      = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PositionAngle))
-            Heights.append(np.sqrt((x0-Xc)**2 + (y0-Yc)**2)/np.sin(np.arccos(b/a)))
+
+            # X_e, Y_e       = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PositionAngle))
+            D_D            = Tools.Height_Compute(X_e, Y_e, x0, y0)
+            # D_D            = np.sqrt((Xc - x0)**2 + (Yc - y0)**2)
+            D_H            = D_D / np.sin(D_inclinations)
+            Heights.append(D_H)
+            # Heights.append(np.sqrt((x0-Xc)**2 + (y0-Yc)**2) / np.sin(D_inclinations))
             Mid_Radius.append(a)
 
         D_incl   = np.std(Inclinations)
@@ -444,11 +559,24 @@ class FilteringWindow(QDialog):
         D_H      = np.std(Heights)
         D_R      = np.std(Mid_Radius)
         D_Chi    = 0
-        D_Aspect = np.std(np.array(Heights)/np.array(Mid_Radius))
-        Data_to_Save    = {"params"     : [incl, R, H, Aspect, 1, PA], 
-                        "Err"        : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
-                        'Points'     : [self.X, self.Y], 
-                        "Ellipse"    : Ellipse_points}
+        D_Aspect = Aspect * np.sqrt((D_R/R)**2 + (D_H/H)**2)
+
+        Data_to_Save    = { "params"        : [incl, R, H, Aspect, 1, PA], 
+                            "first_estim"   : First_Estimation,
+                            "Err"           : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
+                            'Points'        : [X, Y, All_X, All_Y], 
+                            "Ellipse"       : Ellipse_points,
+                            "first_ellipse" : First_Ellipse_points,
+                            "Filters"       : {"gaussian_filter" : self.gaussian_value, 
+                                               "smooth_filter"   : self.smooth_value, 
+                                               "prominence"      : self.Prominence_value,
+                                               "distance"        : self.Distance_value, 
+                                               "width"           : self.Width_value, 
+                                               "HighPass"        : self.HighPass_value, 
+                                               "Mincut_Radius"   : self.MinCutRad_value, 
+                                               "Maxcut_Radius"   : self.MaxCutRad_value, 
+                                               "method"          : self.Method_Value}}
+        
         GUI_Folder, Fitting_Folder, SPF_Folder = Tools.Init_Folders()
         with open(f"{Fitting_Folder}/{Fit_Name}", 'wb') as fichier:
             pkl.dump(Data_to_Save, fichier)

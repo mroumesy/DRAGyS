@@ -123,7 +123,7 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi, liste=None):
 
     return x, y
 
-def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, method='Azimuthal'):
+def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, nb_phi=360, method='Azimuthal'):
     X, Y  = [], []
     image = ndimage.gaussian_filter(image , sigma = gaussian_filter)
 
@@ -211,7 +211,7 @@ def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence
                     Y.append(y)
     
     elif method == 'Azimuthal':
-        Phi = np.radians(np.linspace(0, 359, 360))
+        Phi = np.radians(np.linspace(0, 359, nb_phi))
         if R_max == None:
             R = np.arange(0, int(len(image)/2), 1)
         else :
@@ -219,7 +219,13 @@ def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence
         for phi in Phi:
             x = list(map(int, len(image)/2 + R*np.sin(phi)))
             y = list(map(int, len(image)/2 + R*np.cos(phi)))
+            # points = list(zip(x, y))
+            # points_uniques = list(set(points))
+            # x, y = zip(*points_uniques)
+            # x = list(x)
+            # y = list(y)
             Flux    = image[x, y]
+
 
             flux = np.log(Flux)
             flux_smooth = moving_average(np.array(flux), smooth_filter)
@@ -285,6 +291,41 @@ def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb, filename, Tsigma=
     GUI_Folder, Fitting_Folder, SPF_Folder = Init_Folders()
     with open(f"{Fitting_Folder}/{filename}", 'wb') as fichier:
         pickle.dump(Data_to_Save, fichier)
+
+def ellipse(incl, PA, h, r, chi, R, phi, x0=0, y0=0):
+    x     = R * np.sin(phi)
+    y     = h * (R/r)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
+    x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA)
+    y_rot = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA)
+    return y_rot + y0, x_rot + x0
+
+def uniform_ellipse(incl, PA, Height, Radius, chi, R, space, x0=0, y0=0, init=0):
+    """
+    Compute uniformly space points along ellipse.
+    :param incl: ellipse incl
+    :param PA: ellipse Position Angle
+    :param Height: Disk Scattering Surface Height
+    :param Radius: Disk Scattering Surface Midplane Radius
+    :param chi: Disk Scattering Surface flaring Exponent
+    :param R: Radius where we begin the extraction 
+    :param space: space between one azimuth and the next one. Usually equal to 2 * PSF radius
+    :return: (x, y) coordinates of ellipse
+    """
+    # Étape 1 : Discrétiser l'ellipse avec une haute résolution
+    t = np.linspace(0, 2 * np.pi, 10000)  # Résolution élevée pour une approximation précise
+    x, y = ellipse(incl, PA, Height, Radius, chi, R, t, x0, y0)
+    # Étape 2 : Calculer les longueurs des segments entre les points
+    distances = np.sqrt(np.diff(x)**2 + np.diff(y)**2)  # Distance entre chaque point
+    cumulative_distances = np.cumsum(distances)         # Longueurs cumulées
+    total_perimeter = cumulative_distances[-1]          # Périmètre total de l'ellipse
+    # Étape 3 : Positions uniformes le long du périmètre
+    uniform_distances = np.arange(init, total_perimeter + init, space)
+    # uniform_distances = np.linspace(0, total_perimeter, num_points)
+    # Étape 4 : Interpoler les positions (x, y) sur l'ellipse
+    uniform_x = np.interp(uniform_distances, np.hstack(([0], cumulative_distances)), x)
+    uniform_y = np.interp(uniform_distances, np.hstack(([0], cumulative_distances)), y)
+    return uniform_x, uniform_y
+
 
 def Random_Ellipse(Radius, Phi, xs, ys, xe, ye, incl, R, H, Aspect, Chi, PA):
     x     = Radius * np.sin(Phi)
@@ -453,7 +494,8 @@ def MCFOST_PhaseFunction(file_path, Name, Normalization):
         MCFOST_Scatt   = np.linspace(0, 180, len(MCFOST_I))
     
         MCFOST_PI      = MCFOST_I*polar
-        MCFOST_DoP     = MCFOST_PI / MCFOST_I
+        # MCFOST_DoP     = MCFOST_PI / MCFOST_I
+        MCFOST_DoP = polar
         MCFOST_I  = MCFOST_I/np.max(MCFOST_I)
         MCFOST_PI = MCFOST_PI/np.max(MCFOST_PI)
 
