@@ -1,29 +1,28 @@
+from PyQt6.QtWidgets import QMessageBox, QTextEdit, QApplication, QScrollArea, QDialog, QSpacerItem, QSizePolicy, QWidget, QSlider, QCheckBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox, QFrame, QProgressBar
+from PyQt6.QtCore import Qt
+
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.patches import Wedge
+from matplotlib.figure import Figure
+from matplotlib.path import Path
+from matplotlib.patches import Polygon
+import matplotlib.pyplot as plt
+from matplotlib import colors
+
+from astropy.io import fits
+from scipy import ndimage
 import sys
 import os
 import pathlib
+import json
+import numpy as np
+import pickle as pkl
+import time
+
 current_folder = pathlib.Path(__file__).parent
 sys.path.append(current_folder)
-import numpy as np
-import time
-from PyQt6.QtWidgets import QTextEdit, QApplication, QScrollArea, QDialog, QSpacerItem, QSizePolicy, QWidget, QSlider, QCheckBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox, QFrame, QProgressBar
-from PyQt6.QtCore import Qt
-
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-import matplotlib.patches as patches
-from matplotlib.patches import Wedge
-
-from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
-from matplotlib import colors
-from matplotlib.figure import Figure
-
-import pickle as pkl
-
-from astropy.io import fits
-import Tools as Tools
-import SPF_Window as SPF
-from   Filter_Pixel import FilteringWindow
+import Tools
 
 
 class DRAGyS(QWidget):
@@ -47,15 +46,24 @@ class DRAGyS(QWidget):
         self.List_Buttons    = []
         self.List_BigButtons = []
         self.List_Frame      = []
-        self.GUI_Folder, self.Fitting_Folder, self.SPF_Folder = Tools.Init_Folders()
+
+        # Config Save Folder Buttons
+        self.config_file = "config.json"
+        self.folderpath = self.get_save_directory()
+        if "DRAGyS_Results" not in os.listdir(self.folderpath):
+            os.mkdir(f"{self.folderpath}/DRAGyS_Results")
+        self.Configlayout = QHBoxLayout()
+        self.Configlabel  = QLabel(f"Current directory : \n{self.folderpath}", self)
+        self.Configlabel.setEnabled(False)
+        self.change_dir_button = QPushButton("Modify")
+        self.change_dir_button.clicked.connect(self.change_save_directory)
+    
 
         # Files Browsers Buttons
         self.browse_button = QPushButton('Browse Files', self)
         self.browse_button.clicked.connect(self.browse_files)
         self.file_label = QLabel('No file selected', self)
         self.file_label.setFixedHeight(15)
-        self.fit_file = QLabel("Is Fitting already done ? None", self)
-        self.fit_file.setFixedHeight(15)
 
         # Fitting Buttons
         self.Display_Fit_button = QPushButton('Show Fitting', self)
@@ -67,8 +75,10 @@ class DRAGyS(QWidget):
 
         # Parameters Box
         self.UseFittingButton       = QPushButton("Polarized Fitting")
+        self.Label_Fitting          = QLabel("No fitting file found", self)
+        self.UseFittingButton.setEnabled(False)
         self.UseFittingButton.clicked.connect(self.FittingType)
-        self.UseFittingButton.setFixedWidth(80)
+        # self.UseFittingButton.setFixedWidth(180)
         self.Inclination_text       = QLabel('i = ', self)
         self.PositionAngle_text     = QLabel('PA = ', self)
         self.Scale_Height_text      = QLabel('h/r = ', self)
@@ -171,8 +181,8 @@ class DRAGyS(QWidget):
         self.Y_StarPosition = QDoubleSpinBox(self)
         self.X_StarPosition.setRange(0.0, 10000.0)
         self.Y_StarPosition.setRange(0.0, 10000.0)
-        self.X_StarPosition.setFixedWidth(50)
-        self.Y_StarPosition.setFixedWidth(50)
+        self.X_StarPosition.setFixedWidth(100)
+        self.Y_StarPosition.setFixedWidth(100)
         self.CheckStar.stateChanged.connect(self.on_check_Star_Position)
         self.CheckStar.setChecked(False)
         self.CheckStar.setEnabled(False)
@@ -207,7 +217,6 @@ class DRAGyS(QWidget):
         self.HeaderButton.setEnabled(False)
         self.AzimuthButton.setEnabled(False)
         self.HeaderButton.setFixedHeight(80)
-        self.AzimuthButton.setFixedHeight(40)
 
         # Observations Parameters Buttons
         self.diameter_label   = QLabel('Telescope Diameter (m) : ', self)
@@ -230,13 +239,8 @@ class DRAGyS(QWidget):
         self.wavelength_entry.setDecimals(3)
         self.pixelscale_entry.setDecimals(7)
         self.distance_entry.setDecimals(3)
-        # self.nb_bin_entry.setRange(0.0, 10000.0)
         self.diameter_entry.setValue(8.2)
         self.wavelength_entry.setValue(1.65)
-        # self.pixelscale_entry.setEnabled(False)
-        # self.distance_entry.setEnabled(False)
-        # self.nb_bin_entry.setEnabled(False)
-        # self.pixelscale_entry.setEnabled(False)
         self.diameter_entry.setFixedWidth(80)
         self.wavelength_entry.setFixedWidth(80)
         self.pixelscale_entry.setFixedWidth(80)
@@ -277,8 +281,9 @@ class DRAGyS(QWidget):
         self.Compute_PhF_button   = QPushButton('Compute SPF', self)
         self.Show_disk_PhF_button = QPushButton('Show All SPF', self)
         self.Show_img_PhF_button  = QPushButton("Image & SPF", self)
+        self.SPF_Type_button.setEnabled(False)
+        self.Compute_PhF_button.setEnabled(False)
         self.SPF_Type_button.setFixedHeight(30)
-        # self.Compute_PhF_button.setEnabled(False)
         self.Show_disk_PhF_button.setEnabled(False)
         self.Show_img_PhF_button.setEnabled(False)
         self.SPF_Type_button.clicked.connect(self.Change_total_polarized)
@@ -303,7 +308,6 @@ class DRAGyS(QWidget):
         self.List_Buttons.append(self.img_3_button)
         self.List_Buttons.append(self.img_4_button)
         self.List_Buttons.append(self.img_5_button)
-        self.List_Buttons.append(self.AzimuthButton)
         self.List_Buttons.append(self.HeaderButton)
         self.List_BigButtons.append(self.HeaderButton)
 
@@ -332,6 +336,16 @@ class DRAGyS(QWidget):
         self.canvas.setFixedHeight(500)
         layout = QHBoxLayout()
 
+
+        # Config Directory
+        Configbox = QFrame()
+        Configbox.setFrameShape(QFrame.Shape.StyledPanel)
+        Configbox.setFrameShadow(QFrame.Shadow.Raised)
+        configbox = QHBoxLayout()
+        configbox.addWidget(self.Configlabel)
+        configbox.addWidget(self.change_dir_button)
+        Configbox.setLayout(configbox)
+
         # Browse files
         Browsebox = QFrame()
         Browsebox.setFrameShape(QFrame.Shape.StyledPanel)
@@ -348,7 +362,6 @@ class DRAGyS(QWidget):
         FitBoxButton = QVBoxLayout()
         FitBoxButton.addWidget(self.Display_Fit_button)
         FitBoxButton.addWidget(self.Compute_Fit_button)
-        FitBoxButton.addWidget(self.fit_file)        
 
         Errorbox = QVBoxLayout()
         Errorbox.addWidget(self.ErrInclinationLine)
@@ -397,6 +410,9 @@ class DRAGyS(QWidget):
         StarPositionBox.addLayout(xPosition)
         StarPositionBox.addLayout(yPosition)
         FitBoxButton.addLayout(StarPositionBox)
+        FitBoxButton.setAlignment(StarPositionBox, Qt.AlignmentFlag.AlignCenter)
+        FitBoxButton.addWidget(self.AzimuthButton)
+
 
         VFitParameters = QVBoxLayout()
         FitParameters = QHBoxLayout()
@@ -405,8 +421,9 @@ class DRAGyS(QWidget):
         FitParameters.addLayout(ValueBox)
         FitParameters.addLayout(PMBox)
         FitParameters.addLayout(Errorbox)
+        VFitParameters.addWidget(self.UseFittingButton)
+        VFitParameters.addWidget(self.Label_Fitting)
         VFitParameters.addLayout(FitParameters)
-        VFitParameters.addWidget(self.AzimuthButton)
         FitParameters.setAlignment(TxtBox,   Qt.AlignmentFlag.AlignRight)
         FitParameters.setAlignment(ValueBox, Qt.AlignmentFlag.AlignRight)
         FitParameters.setAlignment(PMBox,    Qt.AlignmentFlag.AlignRight)
@@ -414,18 +431,14 @@ class DRAGyS(QWidget):
 
         fitbox0 = QHBoxLayout()
         fitbox0.addLayout(FitBoxButton)
-        spacer = QSpacerItem(50, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        spacer = QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         fitbox0.addItem(spacer)
         fitbox0.addLayout(VFitParameters)
 
         fitbox = QVBoxLayout()
-        # fitbox.addWidget(self.CheckInputParams)
-        fitbox.addWidget(self.UseFittingButton)
         fitbox.addLayout(fitbox0)
         FitBox.setLayout(fitbox)
-        fitbox.setAlignment(self.AzimuthButton, Qt.AlignmentFlag.AlignRight)
-        # fitbox.setAlignment(self.CheckInputParams, Qt.AlignmentFlag.AlignRight)
-        fitbox.setAlignment(self.UseFittingButton, Qt.AlignmentFlag.AlignRight)
+        VFitParameters.setAlignment(self.Label_Fitting,    Qt.AlignmentFlag.AlignCenter)
     
         # Parameters
         diameterbox = QHBoxLayout()
@@ -480,6 +493,7 @@ class DRAGyS(QWidget):
         PhFbox.addWidget(self.SPF_Type_button)
         PhFbox.addLayout(PhFBox_button)
         PhFbox.addWidget(self.Is_computed)
+        PhFbox.setAlignment(self.Is_computed, Qt.AlignmentFlag.AlignCenter)
 
         AllPhFbox = QFrame()
         AllPhFbox.setFrameShape(QFrame.Shape.StyledPanel)
@@ -522,6 +536,7 @@ class DRAGyS(QWidget):
         LeftBBox.setFrameShape(QFrame.Shape.StyledPanel)
         LeftBBox.setFrameShadow(QFrame.Shadow.Raised)
         leftbbox = QVBoxLayout()
+        leftbbox.addWidget(Configbox)
         leftbbox.addWidget(Browsebox)
         leftbbox.addWidget(FitBox)
         leftbbox.addWidget(ParaBox)
@@ -545,6 +560,52 @@ class DRAGyS(QWidget):
         self.setGeometry(50, 50, 1200, 500)
         self.setWindowTitle('GUI Disk Fitting Yields to Scattering Phase Function Extraction')
             
+    def get_save_directory(self):
+        """
+        Checks whether a save directory has already been defined.
+        If not, asks the user to select one, and saves it.
+        """
+        if os.path.exists(self.config_file):
+            with open(self.config_file, "r") as f:
+                config = json.load(f)
+                if "save_directory" in config and os.path.isdir(config["save_directory"]):
+                    return config["save_directory"]
+        return self.ask_user_for_directory()
+
+    def ask_user_for_directory(self):
+        """
+        Displays a dialog box to request a directory from the user.
+        """
+        dialog = QFileDialog(self)
+        dialog.setFileMode(QFileDialog.FileMode.Directory)
+        dialog.setWindowTitle("Select a save directory")
+        if dialog.exec():
+            selected_directory = dialog.selectedFiles()[0]
+            self.save_directory_to_config(selected_directory)
+            return selected_directory
+        else:
+            QMessageBox.critical(self, "Error", "No directory selected. Application will close.")
+            sys.exit(1)
+
+    def save_directory_to_config(self, directory):
+        """
+        Saves the selected directory to a config file.
+        """
+        with open(self.config_file, "w") as f:
+            json.dump({"save_directory": directory}, f)
+        self.folderpath = directory
+
+    def change_save_directory(self):
+        """
+        Allows the user to modify the save directory.
+        """
+        new_directory = self.ask_user_for_directory()
+        if "DRAGyS_Results" not in os.listdir(new_directory):
+            os.mkdir(f"{new_directory}/DRAGyS_Results")
+        self.save_directory_to_config(new_directory)
+        self.Configlabel.setText(f"Current directory : {new_directory}")
+        QMessageBox.information(self, "Modified directory", f"The directory has been updated : {new_directory}")
+
     def Set_Initial_Values(self):
         '''
         Difinition of parameters with respect to what it's return on data image name or headers
@@ -611,17 +672,36 @@ class DRAGyS(QWidget):
             self.pixelscale_entry.setValue(0.0036)
         self.pixelscale = float(self.pixelscale_entry.value())
 
-# ========================================================================================
-# ================================    File Finder    =====================================
-# ========================================================================================
+# ==================================================================
+# =====================     File Finder    =========================
+# ==================================================================
+    def update_label_fitting(self):
+        if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
+            self.Label_Fitting.setText(f"Fitting file available")
+            self.Label_Fitting.setStyleSheet('color: green;')
+        else :
+            self.Label_Fitting.setText(f"Fitting file not available")
+            self.Label_Fitting.setStyleSheet('color: red;')
 
     def browse_files(self):
+        """
+        Browse fits file to open data image
+        """
         self.R_adjustement.setEnabled(True)
         self.R_adjustement.setChecked(False)
         self.CheckEZ = False
         self.ax.cla()
-        self.ax.set_ylabel('$\Delta$RA (arcsec)')
-        self.ax.set_xlabel('$\Delta$DEC (arcsec)')
+        self.ax.set_ylabel('$\Delta$ RA (arcsec)')
+        self.ax.set_xlabel('$\Delta$ DEC (arcsec)')
+        self.ax.set_aspect('equal')
+        self.ax.spines['bottom'].set_color('w')
+        self.ax.spines['top'].set_color('w')
+        self.ax.spines['left'].set_color('w')
+        self.ax.spines['right'].set_color('w')
+        self.ax.tick_params(axis='x', colors='w')
+        self.ax.tick_params(axis='y', colors='w')
+        self.ax.xaxis.label.set_color('w')
+        self.ax.yaxis.label.set_color('w')
         file_dialog = QFileDialog()
         self.file_path, _ = file_dialog.getOpenFileName(self, 'Select a file', filter='Fichiers FITS (*.fits)')
         self.disk_name = self.file_path.split("/")[-1]
@@ -631,13 +711,31 @@ class DRAGyS(QWidget):
             self.file_name = (self.file_path.split('/'))[-1]
             self.file_label.setText(f"Selected file : {self.file_name}")
             self.Compute_Fit_button.setEnabled(True)
-            # self.fit_file_name = 'Fitting_' + self.disk_name + '_' + self.img_type + '.pkl'
-            self.fit_file_name = f'Fitting_{self.disk_name}_{self.fit_type}.pkl'
+            self.UseFittingButton.setEnabled(True)
+            self.SPF_Type_button.setEnabled(True)
+            self.Compute_PhF_button.setEnabled(True)
+            self.update_label_fitting()
             self.Set_Initial_Values()
             self.Init_image(self.file_path)
             self.SavedParams()
+            self.Clickable_Buttons()
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
+
+
+# ==================================================================
+# =====================  Condition Buttons =========================
+# ==================================================================
+    def Clickable_Buttons(self):
+        if os.path.exists(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"):
+            self.Show_disk_PhF_button.setEnabled(True)
+            self.Show_img_PhF_button.setEnabled(True)
+        else :
+            self.Show_disk_PhF_button.setEnabled(False)
+            self.Show_img_PhF_button.setEnabled(False)
+        
+        if os.path.exists(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.tspf") and os.path.exists(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.pspf"):
+            self.Show_disk_PhF_button.setEnabled(True)
 
 # ==================================================================
 # =====================    Image Display   =========================
@@ -649,7 +747,6 @@ class DRAGyS(QWidget):
             self.displayed_img.remove()
         except:
             SERGE = "Scattering Extraction from Ring Geometry Estimation"
-        # self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
         self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.LogNorm())
         self.Zoom_Slider_Update(self.ZoomSlider.value())
 
@@ -699,6 +796,7 @@ class DRAGyS(QWidget):
         elif self.fit_type == 'Polarized':
             self.fit_type  =  'Total'
             self.UseFittingButton.setText("Total Fitting")
+        self.update_label_fitting()
         self.SavedParams()
 
     def SavedParams(self):
@@ -707,15 +805,13 @@ class DRAGyS(QWidget):
         When compute fitting is done
         When click on "Polarized/Total Fitting", to update displayed parameters
         """
-        # Fit_Name = f'Fitting_{self.disk_name}_{self.fit_type}.pkl'
         try :
-            with open(f'{self.Fitting_Folder}/Fitting_{self.disk_name}_{self.fit_type}.pkl', 'rb') as fichier:
+            with open(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit', 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
             [self.incl,   self.r_ref,   self.h_ref,   self.aspect,   self.alpha,   self.PA]   = Loaded_Data['params']
             [self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, self.D_alpha, self.D_PA] = Loaded_Data['Err']
             self.UpdateFitting()
         except :
-            print("No fitting file found")
             self.UpdateParams()
 
     def UpdateParams(self):
@@ -789,10 +885,9 @@ class DRAGyS(QWidget):
             layout_fit.addWidget(canvas_fit)
             self.Fitting.setLayout(layout_fit)
 
-            [Xc, Yc, X_e, Y_e, a, b, e] = Tools.Load_Structure(self.fit_file_name, Type='Ellipse')
-            [X, Y, all_X, all_X] = Tools.Load_Structure(self.fit_file_name, Type='Points')
+            [Xc, Yc, X_e, Y_e, a, b, e] = Tools.Load_Structure(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", Type='Ellipse')
+            [X, Y, all_X, all_X]        = Tools.Load_Structure(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", Type='Points')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
-            # ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
             ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.LogNorm())
             ax.scatter((Y-center)*PixelScale, (X-center)*PixelScale, marker='.', color='blue') # given points
             ax.plot((Y_e-center)*PixelScale,  (X_e-center)*PixelScale, label="ellipse fit", color='blue')
@@ -804,9 +899,6 @@ class DRAGyS(QWidget):
             ax.text(x_min, x_max, u'i = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(self.incl),3))+' °', str(np.round(np.degrees(self.PA),3))+' °', str(np.round(self.aspect, 3))), color='red', ha='left', va='top')
             self.Fitting.show()
 
-# ==================================================================
-# ===================    Data Filtering    =========================
-# ==================================================================
     def Launch_Filtering_Data(self):
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.value())
@@ -814,12 +906,10 @@ class DRAGyS(QWidget):
         D = float(self.diameter_entry.value())
         W = float(self.wavelength_entry.value())
         r_beam = np.degrees((W*1e-6)/D) *3600/PixelScale
-        self.Filtering_Window = FilteringWindow(self.disk_name, self.fit_type, self.img_chose, self.thresh_chose, x_min, x_max, r_beam)
+        self.Filtering_Window = FilteringWindow(self.disk_name, self.fit_type, self.img_chose, self.thresh_chose, x_min, x_max, r_beam, self.folderpath)
         self.Filtering_Window.exec()
-        if self.fit_file_name in os.listdir(self.Fitting_Folder):
+        if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
             self.Display_Fit_button.setEnabled(True)
-            self.fit_file.setText("Is Fitting already? Yes")
-            self.fit_file.setStyleSheet('color: green;')
             self.SavedParams()
 
 # ==================================================================
@@ -863,7 +953,7 @@ class DRAGyS(QWidget):
             self.Display_EZ = True
 
     def Ellipse(self, R, pixelscale):
-        [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure(f'Fitting_{self.disk_name}_{self.fit_type}.pkl', Type='Ellipse')
+        [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit', Type='Ellipse')
         xs = ys = len(self.img_0)/2
         yc_p, xc_p = Tools.Orthogonal_Prejection((xs, ys), (Yc, Xc), np.pi/2 - self.PA)
         Phi = np.radians(np.linspace(0, 359, 360))
@@ -904,17 +994,7 @@ class DRAGyS(QWidget):
         else:
             self.SPF_Type_button.setText("Polarized")
             self.img_type = "Polarized"
-
-        if self.img_type + '_' + self.disk_name + '.spf' in os.listdir(self.SPF_Folder) :
-            self.Is_computed.setText(self.disk_name + " Phase Function is already computed")
-            self.Is_computed.setStyleSheet('color: green')
-            self.Show_disk_PhF_button.setEnabled(True)
-            self.Show_img_PhF_button.setEnabled(True)
-        else : 
-            self.Is_computed.setText(self.disk_name + " Phase Function is not computed")
-            self.Is_computed.setStyleSheet('color: red')
-            self.Show_disk_PhF_button.setEnabled(False)
-            self.Show_img_PhF_button.setEnabled(False)
+        self.Clickable_Buttons()
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
 
@@ -931,7 +1011,7 @@ class DRAGyS(QWidget):
         xs = float(self.X_StarPosition.value())
         ys = float(self.Y_StarPosition.value())
         if self.InputStar:
-            [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure(f'Fitting_{self.disk_name}_{self.fit_type}.pkl', Type='Ellipse')
+            [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit', Type='Ellipse')
         else:
             Xc, Yc = None, None
 
@@ -945,7 +1025,7 @@ class DRAGyS(QWidget):
                             [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA + self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "PA"],
                             [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect - self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Aspect"],
                             [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect + self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, "Aspect"]]
-        SPF.Compute_SPF(list_params_SPF, self.file_name, self.img_type)
+        Tools.Compute_SPF(list_params_SPF, self.folderpath, self.file_name, self.img_type)
         end = time.time()
         self.Is_computed.setText(" SPF computed - time = " +str(np.round(end-start, 2)) + ' seconds')
         self.Is_computed.setStyleSheet('color: green')
@@ -967,7 +1047,6 @@ class DRAGyS(QWidget):
             figure_Disk_PhF.clear()  # Nettoyer la figure
         except:
             Tool_Could_Also_be_named = 'DRAGyS'
-        # figure_Disk_PhF = Figure()
         figure_Disk_PhF, (self.ax_Disk_PhF_I, self.ax_Disk_PhF_PI, self.ax_Disk_DoP) = plt.subplots(1, 3)
         self.ax_Disk_DoP.clear()
         self.ax_Disk_PhF_I.clear()
@@ -1065,8 +1144,8 @@ class DRAGyS(QWidget):
         self.ax_Disk_DoP.set_xlabel("Degree of Polarization")
         self.ax_Disk_DoP.set_ylabel("Scattering Angle (deg)")
 
-        total_folder     = f"{self.SPF_Folder}/Total_{self.disk_name}.spf"
-        polarized_folder = f"{self.SPF_Folder}/Polarized_{self.disk_name}.spf"
+        total_folder     = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.tspf"
+        polarized_folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.pspf"
         try :
             self.atSca, _, self.atSPF, self.D_atSca, _, self.D_atSPF, self.atLB, self.D_atLB = Tools.Get_PhF(total_folder, side='All',  LBCorrected=self.LBCorrected, norm=self.NormType)
             self.etSca, _, self.etSPF, self.D_etSca, _, self.D_etSPF, self.etLB, self.D_etLB = Tools.Get_PhF(total_folder, side='East', LBCorrected=self.LBCorrected, norm=self.NormType)
@@ -1144,24 +1223,6 @@ class DRAGyS(QWidget):
             self.ax_Disk_DoP.set_ylim(np.min(DoP_bound)*(1-marge), np.max(DoP_bound)*(1+marge))
 
         self.canvas_Disk_PhF.draw()
-    
-    def Ginski_Color(self, Disks):
-        if 'LkCa15' in Disks:
-            c = 'blue'
-        elif 'HD163296' in Disks:
-            c = 'red'
-        elif 'RX J1615' in Disks:
-            c = 'coral'
-        elif 'PDS 66' in Disks:
-            c = 'khaki'
-        elif 'HD34282' in Disks:
-
-            c = 'black'
-        elif 'RX J1852' in Disks:
-            c = 'orange'
-        elif 'V4046' in Disks:
-            c = 'green'
-        return c
 
     def Show_img_PhF(self):
         try:
@@ -1170,7 +1231,6 @@ class DRAGyS(QWidget):
             Tool_Could_Also_be_named = 'DRAGyS'
         self.Img_PhF = QWidget()
         self.Img_PhF.setWindowTitle("Phase Functions")
-        # Fig_img_phF = Figure()
         Fig_img_phF = plt.figure(figsize = (9, 4))#, dpi = 300)
         ax_img_Extraction   = plt.subplot2grid((1, 5), (0, 0), colspan=2, rowspan=1)
         ax_phF              = plt.subplot2grid((1, 5), (0, 2), colspan=3, rowspan=1)
@@ -1181,8 +1241,8 @@ class DRAGyS(QWidget):
         Canvas_Img_PhF = FigureCanvas(Fig_img_phF)
         Toolbar = NavigationToolbar(Canvas_Img_PhF, self)
         layout_Img_PhF = QVBoxLayout()
-        folder = f"{self.SPF_Folder}/{self.img_type}_{self.disk_name}.spf"
-        Scatt,      _, PI,      Err_Scatt, _,      Err_PI,      LB,      Err_LB      = Tools.Get_PhF(folder, side='All')
+        folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"
+        Scatt,      _, PI,      Err_Scatt,      _, Err_PI,      LB,      Err_LB      = Tools.Get_PhF(folder, side='All')
         Scatt_east, _, PI_east, Err_Scatt_east, _, Err_PI_east, LB_east, Err_LB_east = Tools.Get_PhF(folder, side='East')
         Scatt_west, _, PI_west, Err_Scatt_west, _, Err_PI_west, LB_west, Err_LB_west = Tools.Get_PhF(folder, side='West')
 
@@ -1211,7 +1271,6 @@ class DRAGyS(QWidget):
         pixelscale = float(self.pixelscale_entry.value())
         size = len(self.img_0)
         arcsec_extent = size/2 * pixelscale
-        # ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
         ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
 
         X_in, Y_in = self.Ellipse(R_in, pixelscale)
@@ -1249,7 +1308,6 @@ class DRAGyS(QWidget):
         self.Img_PhF.show()
 
     def Open_Header(self):
-        # options = QFileDialog.Options()
         with fits.open(self.file_path) as hdul:
             header = hdul[0].header
             header_text = repr(header)
@@ -1260,14 +1318,9 @@ class DRAGyS(QWidget):
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.value())
         x_min, x_max = x_min/PixelScale + len(self.img_chose)/2, x_max/PixelScale + len(self.img_chose)/2
-
         AzimuthWindow = AzimuthEllipseApp(self.img_chose, self.thresh_chose, x_min, x_max)
-        # AzimuthWindow.show()
         AzimuthWindow.exec()
         self.AzimuthalAngle = np.array(AzimuthWindow.Azimuth.flatten())
-        # fig, ax =plt.subplots(1, 1, num='freuiehuiegerhi')
-        # ax.scatter(AzimuthWindow.Azimuth, AzimuthWindow.Azimuth)
-        # plt.show()
 
 class HeaderWindow(QWidget):
     def __init__(self, header_text):
@@ -1288,7 +1341,7 @@ class AzimuthEllipseApp(QDialog):
         super().__init__()
 
         self.setWindowTitle('Suppression d\'azimut sur ellipse')
-        self.setGeometry(100, 100, 1000, 800)  # Fenêtre plus large pour placer l'historique à droite
+        self.setGeometry(100, 100, 1000, 800)
         self.Azimuth = np.linspace(0, 359, 360)
         self.azmask  = list(np.argwhere(np.logical_and(self.Azimuth<=0, self.Azimuth>=360)))
         self.fig = Figure()
@@ -1300,51 +1353,44 @@ class AzimuthEllipseApp(QDialog):
         self.threshold  = threshold
         self.x_min = x_min
         self.x_max = x_max
-        # Paramètres de l'ellipse
+
         self.ellipse_center = (0, 0)
         self.ellipse_width  = self.img_width/2
         self.ellipse_height = self.img_width/2
 
-        # Initialisation de la liste des wedges supprimés
         self.removed_intervals = []
         self.removed_angle = []
-        self.current_wedge = None  # Wedge temporaire pendant le clic
-        self.is_drawing = False    # Pour savoir si l'utilisateur maintient le clic
+        self.current_wedge = None
+        self.is_drawing = False
 
         self.draw_ellipse()
 
-        # Layout principal
         self.main_widget = QWidget(self)
-        main_layout = QHBoxLayout(self.main_widget)  # Layout horizontal pour placer la figure à gauche et l'historique à droite
+        main_layout = QHBoxLayout(self.main_widget)
 
         closeAzimuth = QPushButton('Save Azimuth Angle', self)
         closeAzimuth.clicked.connect(self.SaveAzimuth)
 
-        # Ajouter la figure matplotlib
         main_layout.addWidget(self.canvas)
         main_layout.addWidget(closeAzimuth)
 
-        # Zone pour l'historique à droite
         self.history_widget = QWidget()
         self.history_layout = QVBoxLayout(self.history_widget)
-        self.history_layout.setAlignment(Qt.AlignmentFlag.AlignTop)  # Aligner en haut
+        self.history_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.history_widget)
 
-        # Ajouter la zone de l'historique au layout principal
         main_layout.addWidget(scroll)
 
-        # Connexion des événements de la souris
         self.canvas.mpl_connect('button_press_event', self.on_click)
         self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
-        # Variables pour stocker les points cliqués
         self.x1, self.y1 = None, None
         self.x2, self.y2 = None, None
 
-        self.setLayout(main_layout)  # Définir le layout du QDialog
+        self.setLayout(main_layout)
 
     def SaveAzimuth(self):
         remaining_angles = self.get_remaining_angles()
@@ -1359,53 +1405,43 @@ class AzimuthEllipseApp(QDialog):
     def draw_ellipse(self):
         """Tracer l'ellipse à chaque mise à jour"""
         self.ax.clear()
-        # self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
         self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
         self.ax.set_xlim(-self.img_width, self.img_width)
         self.ax.set_ylim(-self.img_width, self.img_width)
         
-        # Tracer les angles restants de l'ellipse
         remaining_angles = self.get_remaining_angles()
         for start, end in remaining_angles:
             theta = np.radians(np.arange(start, end+0.1, 1))
             x = self.ellipse_width * np.cos(theta)
             y = self.ellipse_height * np.sin(theta)
-            self.ax.plot(x, y, 'b')  # Tracer en bleu les portions restantes de l'ellipse
+            self.ax.plot(x, y, 'b')
 
-        # Tracer les wedges supprimés
         for wedge in self.removed_intervals:
             self.ax.add_patch(wedge)
 
         if self.current_wedge:
             self.ax.add_patch(self.current_wedge)
 
-        # Assurer un affichage carré
         self.ax.set_aspect('equal')
-        # self.ax.set_xlim(-6, 6)
-        # self.ax.set_ylim(-6, 6)  # carré, même échelle sur les axes
         self.canvas.draw()
 
     def get_remaining_angles(self):
         """Retourner la liste des intervalles d'angles restants (azimutaux)"""
-        full_circle = [(0, 360)]  # L'ellipse entière
+        full_circle = [(0, 360)]
         removed_intervals = [(w.theta1, w.theta2) for w in self.removed_intervals]
 
-        # Fonction pour soustraire un intervalle de la liste complète
         def subtract_intervals(intervals, remove):
             result = []
             for start, end in intervals:
                 if remove[1] <= start or remove[0] >= end:
-                    # Pas de chevauchement
                     result.append((start, end))
                 else:
-                    # Chevauchement, on découpe l'intervalle
                     if remove[0] > start:
                         result.append((start, remove[0]))
                     if remove[1] < end:
                         result.append((remove[1], end))
             return result
 
-        # Appliquer toutes les suppressions d'angles
         for remove in removed_intervals:
             full_circle = subtract_intervals(full_circle, remove)
 
@@ -1415,29 +1451,24 @@ class AzimuthEllipseApp(QDialog):
         """Lorsque l'utilisateur clique sur la figure"""
         self.x1, self.y1 = event.xdata, event.ydata
         if self.x1 is not None and self.y1 is not None:
-            self.is_drawing = True  # Commencer à tracer l'arc
+            self.is_drawing = True
 
     def on_release(self, event):
         """Lorsque l'utilisateur relâche la souris"""
         if self.is_drawing:
             self.x2, self.y2 = event.xdata, event.ydata
             if self.x1 is not None and self.y1 is not None and self.x2 is not None and self.y2 is not None:
-                # Calculer les angles d'azimut correspondants
                 angle1 = np.degrees(np.arctan2(self.y1, self.x1))
                 angle2 = np.degrees(np.arctan2(self.y2, self.x2))
-
-                # S'assurer que les angles sont dans le bon sens (0-360 degrés)
                 if angle1 < 0:
                     angle1 += 360
                 if angle2 < 0:
                     angle2 += 360
 
-                # Créer un wedge permanent entre ces deux angles
                 wedge = Wedge(self.ellipse_center, self.ellipse_width*1.5, angle1, angle2, color='red', alpha=0.3)
                 self.removed_intervals.append(wedge)
                 self.add_to_history(angle1, angle2)
 
-            # Réinitialiser le wedge temporaire et redessiner
             self.current_wedge = None
             self.is_drawing = False
             self.draw_ellipse()
@@ -1445,7 +1476,6 @@ class AzimuthEllipseApp(QDialog):
     def on_motion(self, event):
         """Lorsque l'utilisateur déplace la souris en maintenant le clic"""
         if self.is_drawing and self.x1 is not None and self.y1 is not None and event.xdata is not None and event.ydata is not None:
-            # Calculer l'angle entre le point initial et le point actuel
             angle1 = np.degrees(np.arctan2(self.y1, self.x1))
             angle2 = np.degrees(np.arctan2(event.ydata, event.xdata))
 
@@ -1454,10 +1484,8 @@ class AzimuthEllipseApp(QDialog):
             if angle2 < 0:
                 angle2 += 360
 
-            # Mettre à jour le wedge temporaire
             self.current_wedge = Wedge(self.ellipse_center, self.ellipse_width*1.5, angle1, angle2, color='red', alpha=0.3)
             self.removed_angle.append(np.where)
-            # Redessiner la figure pour montrer le wedge en temps réel
             self.draw_ellipse()
 
     def add_to_history(self, angle1, angle2):
@@ -1474,18 +1502,555 @@ class AzimuthEllipseApp(QDialog):
 
     def undo_removal(self, angle1, angle2, hbox):
         """Annuler une suppression d'azimut"""
-        # Retirer le wedge correspondant
         self.removed_intervals = [w for w in self.removed_intervals if not (round(w.theta1) == round(angle1) and round(w.theta2) == round(angle2))]
-        # Supprimer l'entrée de l'historique
         for i in reversed(range(hbox.count())):
             hbox.itemAt(i).widget().deleteLater()
         self.draw_ellipse()
 
+class FilteringWindow(QDialog):
+    def __init__(self, disk_name, img_name, image, threshold, x_min, x_max, r_beam, folderpath, parent=None):
+        super(FilteringWindow, self).__init__(parent)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
+        self.resize(1000, 600)
+        self.nb_steps = 1000
+        self.disk_name = disk_name
+
+        self.image = image
+
+        self.img_name  = img_name
+        self.Lim_Radius = int(len(image)/2 - 1)
+        self.threshold = threshold
+        self.x_min, self.x_max = x_min, x_max
+        self.R_max = int(x_max - len(self.image)/2)
+        self.r_beam = r_beam
+
+        self.folderpath = folderpath
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Filtering Pixel position Data Window')
+        try:
+            self.Filtering_Fig.clear()  # Nettoyer la figure
+        except:
+            Tool_Could_Also_be_named = 'DRAGyS'
+        self.Filtering_Fig = Figure()
+        self.Filtering_ax  = self.Filtering_Fig.add_subplot(111)
+        self.Filtering_Canvas = FigureCanvas(self.Filtering_Fig)
+        self.Filtering_Canvas.setParent(self)
+        
+        close_button = QPushButton('Save Data - Close', self)
+        close_button.clicked.connect(self.Continue)
+        close_button.setFixedHeight(40)
+        close_button.setFixedWidth(300)
+        
+        self.Filtering_Canvas.mpl_connect('button_press_event', self.on_press)
+        self.Filtering_Canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.Filtering_Canvas.mpl_connect('button_release_event', self.on_release)
+
+        self.Gaussian_Label  = QLabel("Gaussian Filter Parameter : ", self)
+        self.Gaussian_slider = QSlider(Qt.Orientation.Horizontal)
+        self.Gaussian_slider.setMinimum(1)
+        self.Gaussian_slider.setMaximum(1000)
+        self.Gaussian_slider.setValue(1)
+        self.gaussian_value = 0.01
+        self.Gaussian_value_Label = QLabel(str(self.gaussian_value))
+        self.Gaussian_slider.setSingleStep(1)
+        self.Gaussian_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.Gaussian_Label.setFixedWidth(200)
+        self.Gaussian_value_Label.setFixedWidth(100)
+        self.Gaussian_slider.setFixedWidth(300)
+
+        self.Smooth_Label  = QLabel("Smooth Profile Parameter : ", self)
+        self.Smooth_slider = QSlider(Qt.Orientation.Horizontal)
+        self.Smooth_slider.setMinimum(1)
+        self.Smooth_slider.setMaximum(10)
+        self.Smooth_slider.setValue(1)
+        self.smooth_value = 1
+        self.Smooth_value_Label = QLabel(str(self.smooth_value))
+        self.Smooth_slider.setSingleStep(1)
+        self.Smooth_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.Smooth_Label.setFixedWidth(200)
+        self.Smooth_value_Label.setFixedWidth(100)
+        self.Smooth_slider.setFixedWidth(300)
+
+        self.Distance_Label  = QLabel("Distance Peaks Parameter : ", self)
+        self.Distance_slider = QSlider(Qt.Orientation.Horizontal)
+        self.Distance_slider.setMinimum(100)
+        self.Distance_slider.setMaximum(10000)
+        self.Distance_slider.setValue(100)
+        self.Distance_value = 1
+        self.Distance_value_Label = QLabel(str(self.Distance_value))
+        self.Distance_slider.setSingleStep(1)
+        self.Distance_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.Distance_Label.setFixedWidth(200)
+        self.Distance_value_Label.setFixedWidth(100)
+        self.Distance_slider.setFixedWidth(300)
+
+        self.Prominence_Label  = QLabel("Prominence Peaks Parameter : ", self)
+        self.Prominence_slider = QSlider(Qt.Orientation.Horizontal)
+        self.Prominence_slider.setMinimum(-500)
+        self.Prominence_slider.setMaximum(500)
+        self.Prominence_slider.setValue(-100)
+        self.Prominence_value = 10**(-100/100)
+        self.Prominence_value_Label = QLabel(str(self.Prominence_value))
+        self.Prominence_slider.setSingleStep(1)
+        self.Prominence_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.Prominence_Label.setFixedWidth(200)
+        self.Prominence_value_Label.setFixedWidth(100)
+        self.Prominence_slider.setFixedWidth(300)
+
+        self.Width_Label  = QLabel("Width Peaks Parameter : ", self)
+        self.Width_slider = QSlider(Qt.Orientation.Horizontal)
+        self.Width_slider.setMinimum(1)
+        self.Width_slider.setMaximum(10000)
+        self.Width_slider.setValue(5000)
+        self.Width_value = 5
+        self.Width_value_Label = QLabel(str(self.Width_value))
+        self.Width_slider.setSingleStep(1)
+        self.Width_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.Width_Label.setFixedWidth(200)
+        self.Width_value_Label.setFixedWidth(100)
+        self.Width_slider.setFixedWidth(300)
+
+        self.HighPass_Label  = QLabel("High Pass Parameter : ", self)
+        self.HighPass_slider = QSlider(Qt.Orientation.Horizontal)
+        self.HighPass_slider.setMinimum(0)
+        self.HighPass_slider.setMaximum(1000)
+        self.HighPass_slider.setValue(0)
+        self.HighPass_value = 1
+        self.HighPass_value_Label = QLabel(str(self.HighPass_value))
+        self.HighPass_slider.setSingleStep(1)
+        self.HighPass_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.HighPass_Label.setFixedWidth(200)
+        self.HighPass_value_Label.setFixedWidth(100)
+        self.HighPass_slider.setFixedWidth(300)
+
+        self.MinCutRad_Label  = QLabel("Min Radius Cut : ", self)
+        self.MinCutRad_slider = QSlider(Qt.Orientation.Horizontal)
+        self.MinCutRad_slider.setMinimum(1)
+        self.MinCutRad_slider.setMaximum(self.Lim_Radius - 1)
+        self.MinCutRad_slider.setValue(2)
+        self.MinCutRad_value = 2
+        self.MinCutRad_value_Label = QLabel(str(self.MinCutRad_value))
+        self.MinCutRad_slider.setSingleStep(1)
+        self.MinCutRad_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.MinCutRad_Label.setFixedWidth(200)
+        self.MinCutRad_value_Label.setFixedWidth(100)
+        self.MinCutRad_slider.setFixedWidth(300)
+
+        self.MaxCutRad_Label  = QLabel("Max Radius Cut : ", self)
+        self.MaxCutRad_slider = QSlider(Qt.Orientation.Horizontal)
+        self.MaxCutRad_slider.setMinimum(1)
+        self.MaxCutRad_slider.setMaximum(self.Lim_Radius)
+        self.MaxCutRad_slider.setValue(self.Lim_Radius)
+        self.MaxCutRad_value = self.Lim_Radius
+        self.MaxCutRad_value_Label = QLabel(str(self.MaxCutRad_value))
+        self.MaxCutRad_slider.setSingleStep(1)
+        self.MaxCutRad_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.MaxCutRad_Label.setFixedWidth(200)
+        self.MaxCutRad_value_Label.setFixedWidth(100)
+        self.MaxCutRad_slider.setFixedWidth(300)
+
+        self.NbAzimuth_Label  = QLabel("nb azimuth : ", self)
+        self.NbAzimuth_slider = QSlider(Qt.Orientation.Horizontal)
+        self.NbAzimuth_slider.setMinimum(10)
+        self.NbAzimuth_slider.setMaximum(360)
+        self.NbAzimuth_slider.setValue(90)
+        self.NbAzimuth_value = 90
+        self.NbAzimuth_value_Label = QLabel(str(self.NbAzimuth_value))
+        self.NbAzimuth_slider.setSingleStep(10)
+        self.NbAzimuth_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.NbAzimuth_Label.setFixedWidth(200)
+        self.NbAzimuth_value_Label.setFixedWidth(100)
+        self.NbAzimuth_slider.setFixedWidth(300)
+
+
+        self.Azimuthal_Method    = QPushButton("Azimutal Cut", self)
+        self.Diagonal_Method     = QPushButton("Diagonal Cut", self)
+        self.Antidiagonal_Method = QPushButton("Antidiagonal Cut", self)
+        self.Horizontal_Method   = QPushButton("Horizontal Cut", self)
+        self.Vertical_Method     = QPushButton("Vertical Cut", self)
+        self.Method_Value = "Azimuthal"
+        self.Azimuthal_Method.setFixedWidth(300)
+        self.Diagonal_Method.setFixedWidth(145)
+        self.Antidiagonal_Method.setFixedWidth(145)
+        self.Horizontal_Method.setFixedWidth(145)
+        self.Vertical_Method.setFixedWidth(145)
+
+        self.Gaussian_slider.valueChanged.connect(lambda   value : self.Change_Fit(value, Type='Gaussian'))
+        self.Smooth_slider.valueChanged.connect(lambda     value : self.Change_Fit(value, Type='Smooth'))
+        self.Distance_slider.valueChanged.connect(lambda   value : self.Change_Fit(value, Type='Distance'))
+        self.Prominence_slider.valueChanged.connect(lambda value : self.Change_Fit(value, Type='Prominence'))
+        self.Width_slider.valueChanged.connect(lambda      value : self.Change_Fit(value, Type='Width'))
+        self.HighPass_slider.valueChanged.connect(lambda   value : self.Change_Fit(value, Type='HighPass'))
+        self.MinCutRad_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='MinCutRad'))
+        self.MaxCutRad_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='MaxCutRad'))
+        self.NbAzimuth_slider.valueChanged.connect(lambda  value : self.Change_Fit(value, Type='NbAzimuth'))
+        self.Azimuthal_Method.clicked.connect(lambda       value : self.Change_Fit(0, Type='Azimuthal'))
+        self.Diagonal_Method.clicked.connect(lambda        value : self.Change_Fit(0, Type='Diagonal'))
+        self.Antidiagonal_Method.clicked.connect(lambda    value : self.Change_Fit(0, Type='Antidiagonal'))
+        self.Horizontal_Method.clicked.connect(lambda      value : self.Change_Fit(0, Type='Horizontal'))
+        self.Vertical_Method.clicked.connect(lambda        value : self.Change_Fit(0, Type='Vertical'))
+        self.Gaussian_Label.setFixedHeight(10)
+        self.Gaussian_value_Label.setFixedHeight(10)
+        self.Smooth_Label.setFixedHeight(10)
+        self.Smooth_value_Label.setFixedHeight(10)
+        self.Distance_Label.setFixedHeight(10)
+        self.Distance_value_Label.setFixedHeight(10)
+        self.Prominence_Label.setFixedHeight(10)
+        self.Prominence_value_Label.setFixedHeight(10)
+        self.Width_Label.setFixedHeight(10)
+        self.Width_value_Label.setFixedHeight(10)
+        self.HighPass_Label.setFixedHeight(10)
+        self.HighPass_value_Label.setFixedHeight(10)
+        self.MinCutRad_Label.setFixedHeight(10)
+        self.MinCutRad_value_Label.setFixedHeight(10)
+        self.MaxCutRad_Label.setFixedHeight(10)
+        self.MaxCutRad_value_Label.setFixedHeight(10)
+        self.NbAzimuth_Label.setFixedHeight(10)
+        self.NbAzimuth_value_Label.setFixedHeight(10)
+
+        self.Azimuthal_Method.setFixedHeight(25)
+        self.Diagonal_Method.setFixedHeight(25)
+        self.Antidiagonal_Method.setFixedHeight(25)
+        self.Vertical_Method.setFixedHeight(25)
+        self.Horizontal_Method.setFixedHeight(25)
+
+        self.progress = QProgressBar(self)
+        self.progress.setMaximum(self.nb_steps)
+        self.progress.setFixedHeight(10)
+        self.progress.setFixedWidth(300)
+
+        DiagonalButton = QHBoxLayout()
+        DiagonalButton.addWidget(self.Diagonal_Method)
+        DiagonalButton.addWidget(self.Antidiagonal_Method)
+
+        VertHorizButton = QHBoxLayout()
+        VertHorizButton.addWidget(self.Vertical_Method)
+        VertHorizButton.addWidget(self.Horizontal_Method)
+
+        MethodButton = QVBoxLayout()
+        MethodButton.addWidget(self.Azimuthal_Method)
+        MethodButton.addLayout(DiagonalButton)
+        MethodButton.addLayout(VertHorizButton)
+
+        Filtering_Layout = QVBoxLayout()
+        
+        GaussianLayout = QHBoxLayout()
+        GaussianLayout.addWidget(self.Gaussian_Label)
+        GaussianLayout.addWidget(self.Gaussian_value_Label)
+        Filtering_Layout.addLayout(GaussianLayout)
+        Filtering_Layout.addWidget(self.Gaussian_slider)
+
+        SmoothLayout = QHBoxLayout()
+        SmoothLayout.addWidget(self.Smooth_Label)
+        SmoothLayout.addWidget(self.Smooth_value_Label)
+        Filtering_Layout.addLayout(SmoothLayout)
+        Filtering_Layout.addWidget(self.Smooth_slider)
+
+        DistanceLayout = QHBoxLayout()
+        DistanceLayout.addWidget(self.Distance_Label)
+        DistanceLayout.addWidget(self.Distance_value_Label)
+        Filtering_Layout.addLayout(DistanceLayout)
+        Filtering_Layout.addWidget(self.Distance_slider)
+
+        ProminenceLayout = QHBoxLayout()
+        ProminenceLayout.addWidget(self.Prominence_Label)
+        ProminenceLayout.addWidget(self.Prominence_value_Label)
+        Filtering_Layout.addLayout(ProminenceLayout)
+        Filtering_Layout.addWidget(self.Prominence_slider)
+
+        WidthLayout = QHBoxLayout()
+        WidthLayout.addWidget(self.Width_Label)
+        WidthLayout.addWidget(self.Width_value_Label)
+        Filtering_Layout.addLayout(WidthLayout)
+        Filtering_Layout.addWidget(self.Width_slider)
+
+        HighPassLayout = QHBoxLayout()
+        HighPassLayout.addWidget(self.HighPass_Label)
+        HighPassLayout.addWidget(self.HighPass_value_Label)
+        Filtering_Layout.addLayout(HighPassLayout)
+        Filtering_Layout.addWidget(self.HighPass_slider)
+
+        MinCutLayout = QHBoxLayout()
+        MinCutLayout.addWidget(self.MinCutRad_Label)
+        MinCutLayout.addWidget(self.MinCutRad_value_Label)
+        Filtering_Layout.addLayout(MinCutLayout)
+        Filtering_Layout.addWidget(self.MinCutRad_slider)
+
+        MaxCutLayout = QHBoxLayout()
+        MaxCutLayout.addWidget(self.MaxCutRad_Label)
+        MaxCutLayout.addWidget(self.MaxCutRad_value_Label)
+        Filtering_Layout.addLayout(MaxCutLayout)
+        Filtering_Layout.addWidget(self.MaxCutRad_slider)
+
+        NbAzimuthLayout = QHBoxLayout()
+        NbAzimuthLayout.addWidget(self.NbAzimuth_Label)
+        NbAzimuthLayout.addWidget(self.NbAzimuth_value_Label)
+        Filtering_Layout.addLayout(NbAzimuthLayout)
+        Filtering_Layout.addWidget(self.NbAzimuth_slider)
+
+        Filtering_Layout.addLayout(MethodButton)
+        Filtering_Layout.addWidget(close_button)
+        Filtering_Layout.addWidget(self.progress)
+
+        Figure_Layout = QVBoxLayout()
+
+        Figure_Layout.addWidget(self.Filtering_Canvas)
+
+        All_Layout = QHBoxLayout()
+        All_Layout.addLayout(Filtering_Layout)
+        All_Layout.addLayout(Figure_Layout)
+        self.setLayout(All_Layout)
+
+        self.rect_start = None
+        self.rect_preview = None
+        X, Y = Tools.Max_pixel(self.image, R_max=self.R_max, gaussian_filter=self.gaussian_value, smooth_filter=self.smooth_value)
+        self.is_drawing  = False
+        self.line        = None
+        self.points      = []
+        self.point_All   = np.column_stack((Y, X))
+        self.point_cloud = np.column_stack((Y, X))
+        
+        self.Filtering_ax.set_facecolor('k')
+        self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+        self.Filtering_ax.set_xlim(self.x_min, self.x_max)
+        self.Filtering_ax.set_ylim(self.x_min, self.x_max)
+        self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
+        self.Change_Fit(1, 'None')
+
+    def Change_Fit(self, value, Type):
+        if Type=='Gaussian':
+            self.gaussian_value = value /100
+            self.Gaussian_value_Label.setText(str(self.gaussian_value))
+            self.displayed_image.remove()
+            self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+
+        elif Type=='Smooth':
+            self.smooth_value = value
+            self.Smooth_value_Label.setText(str(self.smooth_value))
+        elif Type=='Distance':
+            if value == 100:
+                self.Distance_value = None
+            else :
+                self.Distance_value = value/100
+            self.Distance_value_Label.setText(str(self.Distance_value))
+        elif Type=='Prominence':
+            self.Prominence_value = 10**(value/100)
+            self.Prominence_value_Label.setText(str(self.Prominence_value))
+        elif Type=='Width':
+            self.Width_value = value/1000
+            self.Width_value_Label.setText(str(self.Width_value))
+        elif Type=='HighPass':
+            self.HighPass_value = value*2 + 1
+            self.HighPass_value_Label.setText(str(self.HighPass_value))
+        elif Type=='MinCutRad':
+            self.MinCutRad_value = value
+            self.MinCutRad_value_Label.setText(str(self.MinCutRad_value))
+            if self.MinCutRad_value >= self.MaxCutRad_value:
+                self.MaxCutRad_value = value + 1
+                self.MaxCutRad_slider.setValue(value + 1)
+                self.MaxCutRad_value_Label.setText(str(self.MaxCutRad_value))
+        elif Type=='MaxCutRad':
+            self.MaxCutRad_value = value
+            self.MaxCutRad_value_Label.setText(str(self.MaxCutRad_value))
+            if self.MaxCutRad_value <= self.MinCutRad_value:
+                self.MinCutRad_value = value - 1
+                self.MinCutRad_slider.setValue(value-1)
+                self.MinCutRad_value_Label.setText(str(self.MinCutRad_value))
+        elif Type=='NbAzimuth':
+            self.NbAzimuth_value = value
+            self.NbAzimuth_value_Label.setText(str(self.NbAzimuth_value))
+        elif Type=="Azimuthal" or Type=='Diagonal' or Type=='Antidiagonal' or Type=='Vertical' or Type=='Horizontal':
+            self.Method_Value = Type
+        self.scatter.remove()
+        X, Y = Tools.Max_pixel(self.image, R_max = self.R_max,  gaussian_filter = self.gaussian_value, 
+                                                                smooth_filter   = self.smooth_value, 
+                                                                prominence      = self.Prominence_value, 
+                                                                distance        = self.Distance_value, 
+                                                                width           = self.Width_value, 
+                                                                threshold       = None,
+                                                                HighPass        = self.HighPass_value,
+                                                                Mincut_Radius   = self.MinCutRad_value,
+                                                                Maxcut_Radius   = self.MaxCutRad_value,
+                                                                nb_phi          = self.NbAzimuth_value,
+                                                                method          = self.Method_Value)
+        self.point_All   = np.column_stack((Y, X))
+        self.point_cloud = np.column_stack((Y, X))
+        self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
+        self.Filtering_Canvas.draw()
+
+    def on_press(self, event):
+        """Commencer un nouveau tracé lorsque le bouton de la souris est enfoncé"""
+        self.is_drawing = True
+        self.points = [(event.xdata, event.ydata)]  # Initialiser avec le premier point
+
+    def on_release(self, event):
+        """Terminer le tracé lorsque le bouton de la souris est relâché"""
+        self.is_drawing = False
+
+        if len(self.points) > 2:  # S'assurer qu'il y a au moins 3 points pour former une zone
+            # Ajouter le point de départ pour fermer la forme si nécessaire
+            if self.points[0] != self.points[-1]:
+                self.points.append(self.points[0])  # Fermer la forme
+
+            # Créer et ajouter le polygone temporairement pour détection
+            polygon = Polygon(self.points, closed=True, color='red', alpha=0.3)
+            self.Filtering_ax.add_patch(polygon)
+            self.Filtering_Canvas.draw()
+
+            # Supprimer les points à l'intérieur de la forme
+            self.remove_points_in_polygon(self.points)
+
+            # Supprimer le polygone de la figure
+            polygon.remove()
+
+            # Supprimer également la ligne noire du tracé
+            if self.line:
+                self.line.remove()
+                self.line = None
+
+        # Réinitialiser pour un nouveau tracé et mettre à jour l'affichage
+        self.points = []
+        self.Filtering_Canvas.draw()
+
+    def on_motion(self, event):
+        """Tracer en continu pendant que la souris se déplace"""
+        if self.is_drawing and event.xdata is not None and event.ydata is not None:
+            # Ajouter le point actuel à la liste
+            self.points.append((event.xdata, event.ydata))
+
+            # Afficher le tracé temporaire pour voir la forme en cours
+            if self.line:
+                self.line.remove()  # Supprimer le tracé précédent
+            self.line, = self.Filtering_ax.plot([p[0] for p in self.points], [p[1] for p in self.points], color='papayawhip')
+            self.Filtering_Canvas.draw()
+
+    def remove_points_in_polygon(self, polygon_points):
+        """Supprimer les points du nuage qui se trouvent dans le polygone dessiné."""
+        # Convertir les points du polygone en un objet Path pour la vérification
+        path = Path(polygon_points)
+        
+        # Déterminer quels points du nuage sont dans le polygone
+        inside = path.contains_points(self.point_cloud)
+        
+        # Garder uniquement les points qui sont à l'extérieur du polygone
+        self.point_cloud = self.point_cloud[~inside]
+        
+        # Mettre à jour l'affichage du nuage de points
+        self.scatter.set_offsets(self.point_cloud)
+
+    def Continue(self):
+        Fit_Name     = f'{self.disk_name}.{(self.img_name[0]).lower()}fit'
+        x0 = y0      = int(len(self.image)/2)
+        X, Y         = self.point_cloud[:, 1], self.point_cloud[:, 0]
+        All_X, All_Y = self.point_All[:, 1], self.point_All[:, 0]
+        coeffs       = Tools.fit_ellipse(np.array(X), np.array(Y))
+        Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+
+        incl           = np.arccos(b/a)
+        PA             = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+        X_e, Y_e       = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
+        D              = Tools.Height_Compute(X_e, Y_e, x0, y0)
+        H              = D / np.sin(incl)
+        R              = a
+        Aspect         = H/R
+
+        First_Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e]
+        First_Estimation     = [incl, R, H, Aspect, 1, PA]
+
+
+        X_unif, Y_unif = Tools.uniform_ellipse(incl, PA, H, R, 1, R, self.r_beam, x0=x0, y0=y0, init=0)
+        X = []
+        Y = []
+        ny = nx = len(self.image)
+        mapy, mapx = np.indices((ny, nx))
+        for idx in range(len(X_unif)):
+            mask                  = (mapx - X_unif[idx]) ** 2 + (mapy - Y_unif[idx]) ** 2 <= self.r_beam ** 2
+            intensities_in_circle = self.image[mask]
+            max_index             = np.argmax(intensities_in_circle)
+            mask_indices          = np.where(mask)
+            max_y, max_x          = mask_indices[0][max_index], mask_indices[1][max_index]
+            X.append(max_y)
+            Y.append(max_x)
+        X = np.array(X)
+        Y = np.array(Y)
+
+        coeffs                   = Tools.fit_ellipse(X, Y)
+        Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+        incl                     = np.arccos(b/a)
+        PA                       = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+        X_e, Y_e                 = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
+        D                        = Tools.Height_Compute(X_e, Y_e, x0, y0)
+        H                        = D / np.sin(incl)
+        R                        = a
+        Aspect                   = H/R
+        Ellipse_points           = [Xc, Yc, X_e, Y_e, a, b, e]
+
+        Point_Offset = []
+        for idx in range(len(X)):
+            idx_dist     = np.argmin(np.sqrt((X_e - X[idx])**2 + (Y_e - Y[idx])**2))
+            ellipse_dist = np.sqrt((Xc - X_e[idx_dist])**2 + (Yc - Y_e[idx_dist])**2)
+            point_dist   = np.sqrt((Xc - X[idx])**2        + (Yc - Y[idx])**2)
+            dist         = ellipse_dist - point_dist
+            Point_Offset.append(dist)
+    
+        Inclinations    = []
+        PositionAngles  = []
+        Heights         = []
+        Mid_Radius      = []
+        for step in range(self.nb_steps):
+            self.progress.setValue(step + 1)
+            nb_points = 100
+            Radius       = np.random.normal(R, np.std(Point_Offset), nb_points)
+            Phi          = np.random.uniform(0, 2*np.pi, nb_points)
+            Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, Xc, Yc, incl, R, H, Aspect, 1, PA)
+            coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
+            Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
+            D_inclinations = np.arccos(b/a)
+            Inclinations.append(D_inclinations)
+            PositionAngles.append(Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE))
+
+            D_D            = Tools.Height_Compute(X_e, Y_e, x0, y0)
+            D_H            = D_D / np.sin(D_inclinations)
+            Heights.append(D_H)
+            Mid_Radius.append(a)
+        D_incl   = np.std(Inclinations)
+        D_PA     = np.std(PositionAngles)
+        D_H      = np.std(Heights)
+        D_R      = np.std(Mid_Radius)
+        D_Chi    = 0
+        D_Aspect = Aspect * np.sqrt((D_R/R)**2 + (D_H/H)**2)
+
+        Data_to_Save    = { "params"        : [incl, R, H, Aspect, 1, PA], 
+                            "first_estim"   : First_Estimation,
+                            "Err"           : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
+                            'Points'        : [X, Y, All_X, All_Y], 
+                            "Ellipse"       : Ellipse_points,
+                            "first_ellipse" : First_Ellipse_points,
+                            "Data"          : self.image,
+                            "Filters"       : {"gaussian_filter" : self.gaussian_value, 
+                                               "smooth_filter"   : self.smooth_value, 
+                                               "prominence"      : self.Prominence_value,
+                                               "distance"        : self.Distance_value, 
+                                               "width"           : self.Width_value, 
+                                               "HighPass"        : self.HighPass_value, 
+                                               "Mincut_Radius"   : self.MinCutRad_value, 
+                                               "Maxcut_Radius"   : self.MaxCutRad_value, 
+                                               "method"          : self.Method_Value}}
+        with open(f"{self.folderpath}/DRAGyS_Results/{Fit_Name}", 'wb') as fichier:
+            pkl.dump(Data_to_Save, fichier)
+        self.Filtering_Fig.clf()
+        self.Filtering_Canvas.flush_events()
+        plt.close(self.Filtering_Fig)
+        self.accept()
+
 class Launcher():
     def Run():
-        app = QApplication(sys.argv)
-        ex = DRAGyS()
-        ex.show()
-        app.exec()
-
+        if __name__ == "__main__":
+            app = QApplication(sys.argv)
+            ex = DRAGyS()
+            ex.show()
+            app.exec()
+            
 Launcher.Run()
