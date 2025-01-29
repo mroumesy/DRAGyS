@@ -2077,4 +2077,4 @@ class Launcher():
             ex.show()
             app.exec()
             
-Launcher.Run()
+# Launcher.Run()
