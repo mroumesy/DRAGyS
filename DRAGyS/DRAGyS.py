@@ -196,6 +196,7 @@ class DRAGyS(QWidget):
         self.img_3_button  = QPushButton('Image 4', self)
         self.img_4_button  = QPushButton('Image 5', self)
         self.img_5_button  = QPushButton('Image 6', self)
+        self.DataTypeLabel = QLabel("Data Type ?", self)
         self.HeaderButton  = QPushButton('Header',  self)
         self.AzimuthButton = QPushButton('Remove Azimuth',  self)
 
@@ -528,6 +529,8 @@ class DRAGyS(QWidget):
         displaybox1.addLayout(h3box)
         displaybox1.addLayout(h4box)
         displaybox.addLayout(displaybox1)
+        displaybox.addWidget(self.DataTypeLabel)
+        displaybox.setAlignment(self.DataTypeLabel, Qt.AlignmentFlag.AlignCenter)
         DisplayBox.setLayout(displaybox)
 
         # Organisation
@@ -747,11 +750,15 @@ class DRAGyS(QWidget):
             self.displayed_img.remove()
         except:
             SERGE = "Scattering Extraction from Ring Geometry Estimation"
-        self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.LogNorm())
+        if self.Data_Type == "MCFOST_Data":
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+        else :
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.LogNorm())
         self.Zoom_Slider_Update(self.ZoomSlider.value())
 
     def Init_image(self, file_path):
-        [self.img_0,    self.img_1,    self.img_2,    self.img_3,    self.img_4,    self.img_5], [self.thresh_0, self.thresh_1, self.thresh_2, self.thresh_3, self.thresh_4, self.thresh_5] = Tools.Images_Opener(file_path)
+        [self.img_0,    self.img_1,    self.img_2,    self.img_3,    self.img_4,    self.img_5], [self.thresh_0, self.thresh_1, self.thresh_2, self.thresh_3, self.thresh_4, self.thresh_5], self.Data_Type = Tools.Images_Opener(file_path)
+        self.DataTypeLabel.setText((self.Data_Type).replace('_', ' ') + "?")
         PixelScale      = float(self.pixelscale_entry.value())
         self.Size       = len(self.img_0)/2 * PixelScale
         self.all_img    = [self.img_0,    self.img_1,    self.img_2,    self.img_3,    self.img_4,    self.img_5]
@@ -888,7 +895,11 @@ class DRAGyS(QWidget):
             [Xc, Yc, X_e, Y_e, a, b, e] = Tools.Load_Structure(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", Type='Ellipse')
             [X, Y, all_X, all_X]        = Tools.Load_Structure(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", Type='Points')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
-            ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.LogNorm())
+            if self.Data_Type == "MCFOST_Data":
+                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+            else :
+                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.LogNorm())
+
             ax.scatter((Y-center)*PixelScale, (X-center)*PixelScale, marker='.', color='blue') # given points
             ax.plot((Y_e-center)*PixelScale,  (X_e-center)*PixelScale, label="ellipse fit", color='blue')
             ax.set_xlim(x_min, x_max)
@@ -906,7 +917,7 @@ class DRAGyS(QWidget):
         D = float(self.diameter_entry.value())
         W = float(self.wavelength_entry.value())
         r_beam = np.degrees((W*1e-6)/D) *3600/PixelScale
-        self.Filtering_Window = FilteringWindow(self.disk_name, self.fit_type, self.img_chose, self.thresh_chose, x_min, x_max, r_beam, self.folderpath)
+        self.Filtering_Window = FilteringWindow(self.disk_name, self.fit_type, self.img_chose, self.thresh_chose, self.Data_Type, x_min, x_max, r_beam, self.folderpath)
         self.Filtering_Window.exec()
         if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
             self.Display_Fit_button.setEnabled(True)
@@ -1271,7 +1282,10 @@ class DRAGyS(QWidget):
         pixelscale = float(self.pixelscale_entry.value())
         size = len(self.img_0)
         arcsec_extent = size/2 * pixelscale
-        ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+        if self.Data_Type == 'MCFOST_Data':
+            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+        else :
+            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
 
         X_in, Y_in = self.Ellipse(R_in, pixelscale)
         X_out, Y_out = self.Ellipse(R_out, pixelscale)
@@ -1318,7 +1332,7 @@ class DRAGyS(QWidget):
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.value())
         x_min, x_max = x_min/PixelScale + len(self.img_chose)/2, x_max/PixelScale + len(self.img_chose)/2
-        AzimuthWindow = AzimuthEllipseApp(self.img_chose, self.thresh_chose, x_min, x_max)
+        AzimuthWindow = AzimuthEllipseApp(self.img_chose, self.thresh_chose, self.Data_Type, x_min, x_max)
         AzimuthWindow.exec()
         self.AzimuthalAngle = np.array(AzimuthWindow.Azimuth.flatten())
 
@@ -1337,7 +1351,7 @@ class HeaderWindow(QWidget):
         self.setLayout(layout)
 
 class AzimuthEllipseApp(QDialog):
-    def __init__(self, image, threshold, x_min, x_max):
+    def __init__(self, image, threshold, Data_Type, x_min, x_max):
         super().__init__()
 
         self.setWindowTitle('Suppression d\'azimut sur ellipse')
@@ -1351,6 +1365,7 @@ class AzimuthEllipseApp(QDialog):
         self.img_width  = np.abs(x_max - x_min)/2
         self.image      = image
         self.threshold  = threshold
+        self.Data_Type  = Data_Type
         self.x_min = x_min
         self.x_max = x_max
 
@@ -1405,7 +1420,10 @@ class AzimuthEllipseApp(QDialog):
     def draw_ellipse(self):
         """Tracer l'ellipse à chaque mise à jour"""
         self.ax.clear()
-        self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
+        if self.Data_Type == "MCFOST_Data":
+            self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
+        else :
+            self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
         self.ax.set_xlim(-self.img_width, self.img_width)
         self.ax.set_ylim(-self.img_width, self.img_width)
         
@@ -1508,18 +1526,18 @@ class AzimuthEllipseApp(QDialog):
         self.draw_ellipse()
 
 class FilteringWindow(QDialog):
-    def __init__(self, disk_name, img_name, image, threshold, x_min, x_max, r_beam, folderpath, parent=None):
+    def __init__(self, disk_name, img_name, image, threshold, Data_Type, x_min, x_max, r_beam, folderpath, parent=None):
         super(FilteringWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         self.resize(1000, 600)
         self.nb_steps = 1000
         self.disk_name = disk_name
 
-        self.image = image
-
+        self.image     = image
+        self.threshold = threshold
+        self.Data_Type = Data_Type
         self.img_name  = img_name
         self.Lim_Radius = int(len(image)/2 - 1)
-        self.threshold = threshold
         self.x_min, self.x_max = x_min, x_max
         self.R_max = int(x_max - len(self.image)/2)
         self.r_beam = r_beam
@@ -1813,7 +1831,10 @@ class FilteringWindow(QDialog):
         self.point_cloud = np.column_stack((Y, X))
         
         self.Filtering_ax.set_facecolor('k')
-        self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+        if self.Data_Type == "MCFOST_Data":
+            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+        else :
+            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.LogNorm())
         self.Filtering_ax.set_xlim(self.x_min, self.x_max)
         self.Filtering_ax.set_ylim(self.x_min, self.x_max)
         self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
@@ -1824,7 +1845,10 @@ class FilteringWindow(QDialog):
             self.gaussian_value = value /100
             self.Gaussian_value_Label.setText(str(self.gaussian_value))
             self.displayed_image.remove()
-            self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+            if self.Data_Type == "MCFOST_Data":
+                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+            else :
+                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.LogNorm())
 
         elif Type=='Smooth':
             self.smooth_value = value

@@ -937,6 +937,7 @@ def Images_Opener(filepath):
         for nb in range(1, 6):
             IMG[nb] = np.zeros_like(img) + 1
             Thresh[nb] = 1e-40
+        Data_Type = "Simple_Data_-_Total_or_Polarized"
 
     elif nb_dim == 5:  # if it is an MCFOST Simulated Image, dimension is [8, 1, 1, dim, dim]
         # threshold = 0.00000
@@ -953,6 +954,7 @@ def Images_Opener(filepath):
                 Thresh[idx] = 1e-40
             else :
                 Thresh[idx] = np.nanmin(image[mask])
+        Data_Type = "MCFOST_Data"
     else :
         for nb in range(len(IMG)):
             if nb < np.shape(img)[0]:
@@ -966,7 +968,8 @@ def Images_Opener(filepath):
             else :
                 IMG[nb]    = np.zeros_like(img[0, :, :]) + 1
                 Thresh[nb] = 1e-40
-    return IMG, Thresh
+        Data_Type = "Observational_Data_-_SPHERE"
+    return IMG, Thresh, Data_Type
 
 def moving_average(data, window_size):
     smoothed_data = np.convolve(data, np.ones(window_size)/window_size, mode='same')
