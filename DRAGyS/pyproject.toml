@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "DRAGyS"
+version = "1.0.0"
+
+[project.optional-dependencies]
+gui = ["PyQt6"]
+
+requires-python = ">=3.8"
+authors = [
+  {name = "Maxime Roumesy", email = "mroumesy@gmail.com"},
+]
+
+maintainers = [
+  {name = "Maxime Roumesy", email = "mroumesy@gmail.com"},
+]
+
+description = "Disk Ring Adjusted Geometry yields Scattering phase function"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+keywords = ["protoplanetary", "disk", "ring", "ellipse", "dust", "Scattering Phase function"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+[project.urls]
+Repository = "https://github.com/mroumesy/DRAGyS.git"
+"Bug Tracker" = "https://github.com/mroumesy/DRAGyS/issues"
+
+[project.scripts]
+spam-cli = "DRAGyS:Launcher"
+
+[project.gui-scripts]
+spam-gui = "DRAGyS:Launcher"
