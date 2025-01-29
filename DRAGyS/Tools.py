@@ -940,14 +940,14 @@ def Images_Opener(filepath):
 
     elif nb_dim == 5:  # if it is an MCFOST Simulated Image, dimension is [8, 1, 1, dim, dim]
         # threshold = 0.00000
-        Image_0 = img[0, 0, 0]
-        Image_1 = img[1, 0, 0]
-        Image_2 = img[2, 0, 0]
-        Image_3 = img[3, 0, 0]
-        Image_4 = np.sqrt(Image_1**2 + Image_2**2)
+        Image_0 = np.abs(img[0, 0, 0])
+        Image_1 = np.abs(img[1, 0, 0])
+        Image_2 = np.abs(img[2, 0, 0])
+        Image_3 = np.abs(img[3, 0, 0])
+        Image_4 = np.abs(np.sqrt(Image_1**2 + Image_2**2))
         Image_5 = np.zeros_like(Image_0) + 1
         for idx, image in enumerate([Image_0, Image_1, Image_2, Image_3, Image_4, Image_5]):
-            IMG[idx] = image
+            IMG[idx] = image/np.max(image)
             mask = np.where(image > 0.)
             if len(image[mask]) == 0:
                 Thresh[idx] = 1e-40
