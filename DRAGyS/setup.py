@@ -11,6 +11,6 @@ setup(
     license='MIT',
     packages=['DRAGyS'],
     install_requires=[
-        'numpy','matplotlib', 'scipy', 'pickle', 'PyQt6', 'scipy', 'astropy', 'multiprocess'
+        'numpy','matplotlib', 'scipy', 'PyQt6', 'scipy', 'astropy', 'multiprocess'
         ],
 )
