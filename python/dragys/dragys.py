@@ -20,9 +20,10 @@ import numpy as np
 import pickle as pkl
 import time
 
-current_folder = pathlib.Path(__file__).parent
-sys.path.append(current_folder)
-import Tools
+# current_folder = pathlib.Path(__file__).parent
+# sys.path.append(current_folder)
+from dragys import tools as Tools
+
 
 
 class DRAGyS(QWidget):
