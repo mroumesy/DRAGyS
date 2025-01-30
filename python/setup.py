@@ -1,16 +1,10 @@
-from setuptools import setup
+from setuptools import setup, find_packages 
 
-setup(
-    description='Disk Ring Adjusted Geometry yields Scattering phase function',
-    author='Maxime Roumesy',
-    author_email='mroumesy@gmail.com',
-    url='https://github.com/mroumesy/DRAGyS',
-    project_urls={'Documentation': 'https://github.com/mroumesy/DRAGyS'},
-    name='dragys',
-    version='1.0.0',
-    license='MIT',
-    packages=['dragys'],
-    install_requires=[
-        'numpy','matplotlib', 'scipy', 'PyQt6', 'scipy', 'astropy', 'multiprocess'
-        ],
+setup( 
+name='dragys',  # name of package（which will be shown when you type: pip list） 
+version="1.0.0",  # version
+description='Disk Ring Adjusted Geometry yields Scattering phase function',  # description
+author='Maxime Roumesy',  # name of developer
+packages=find_packages(),  # list of models 
+license='MIT'  # licence 
 )
