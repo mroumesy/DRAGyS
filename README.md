@@ -16,7 +16,7 @@ if you want to use *DRAGyS* as package _dragys_, enter in _DRAGyS\python_ direct
 and run 
 
     pip install -e .
-In a python file, you can now import _dragys_ and launch the GUI. Typically, enter these python lines to lauch the tool
+In a python file, you can now import _dragys_ and launch the GUI. Typically, enter these python lines to launch the tool
 
     import dragys
     if __name__ == "__main__":
