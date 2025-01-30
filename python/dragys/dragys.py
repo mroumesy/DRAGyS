@@ -1285,7 +1285,7 @@ class DRAGyS(QWidget):
         if self.Data_Type == 'MCFOST_Data':
             ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
         else :
-            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
 
         X_in, Y_in = self.Ellipse(R_in, pixelscale)
         X_out, Y_out = self.Ellipse(R_out, pixelscale)
@@ -1314,6 +1314,9 @@ class DRAGyS(QWidget):
         ax_img_Extraction.set_xlabel("$ \Delta $DEC (arcsec)")
         ax_img_Extraction.set_ylabel("$ \Delta $RA (arcsec)")
         ax_img_Extraction.set_title("Polarized Intensity Image")
+        (x_min, x_max) = self.ax.get_xlim()
+        ax_img_Extraction.set_xlim(x_min, x_max)
+        ax_img_Extraction.set_ylim(x_min, x_max)
         layout_Img_PhF.addWidget(Toolbar)
         layout_Img_PhF.addWidget(Canvas_Img_PhF)
         self.Img_PhF.setLayout(layout_Img_PhF)
@@ -2072,8 +2075,9 @@ class FilteringWindow(QDialog):
 class Launcher:
     def Run():
         app = QApplication(sys.argv)
-        ex = DRAGyS()
+        ex = DRAGyS()  # Instancie la fenêtre principale
         ex.show()
-        app.exec()
-            
-# Launcher.Run()
+        app.exec()  # Démarre la boucle événementielle
+
+# if __name__ == "__main__":
+#     Launcher.Run()
