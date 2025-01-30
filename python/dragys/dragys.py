@@ -22,8 +22,7 @@ import time
 
 # current_folder = pathlib.Path(__file__).parent
 # sys.path.append(current_folder)
-from dragys import tools as Tools
-
+import dragys.tools as Tools
 
 
 class DRAGyS(QWidget):
