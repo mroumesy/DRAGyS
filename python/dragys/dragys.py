@@ -23,7 +23,7 @@ import time
 # current_folder = pathlib.Path(__file__).parent
 # sys.path.append(current_folder)
 import dragys.tools as Tools
-
+# import tools as Tools
 
 class DRAGyS(QWidget):
     def __init__(self):
@@ -2071,10 +2071,9 @@ class FilteringWindow(QDialog):
 
 class Launcher:
     def Run():
-        if __name__ == "__main__":
-            app = QApplication(sys.argv)
-            ex = DRAGyS()
-            ex.show()
-            app.exec()
+        app = QApplication(sys.argv)
+        ex = DRAGyS()
+        ex.show()
+        app.exec()
             
 # Launcher.Run()
