@@ -2069,7 +2069,9 @@ class FilteringWindow(QDialog):
         plt.close(self.Filtering_Fig)
         self.accept()
 
-class Launcher():
+class Launcher:
+    def __init__():
+        Launch_MaxSoft = "Ok lets try this tool !!"
     def Run():
         if __name__ == "__main__":
             app = QApplication(sys.argv)
