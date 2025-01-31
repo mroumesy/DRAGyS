@@ -8,6 +8,7 @@ from matplotlib.figure import Figure
 from matplotlib.path import Path
 from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
+
 from matplotlib import colors
 
 from astropy.io import fits
@@ -26,11 +27,20 @@ import dragys.tools as Tools
 # import tools as Tools
 
 class DRAGyS(QWidget):
+    """
+    A class to open PyQt6 main GUI of DRAGyS
+    """
     def __init__(self):
+        """
+        Constructs all the necessary attributes for the DRAGyS object.
+        """
         super().__init__()
         self.initUI()
 
     def initUI(self):
+        """
+        Setup all the boolean and PyQt window parameters
+        """
         self.normalization      = False
         self.LogScale           = False
         self.InputParams        = False
@@ -679,6 +689,9 @@ class DRAGyS(QWidget):
 # =====================     File Finder    =========================
 # ==================================================================
     def update_label_fitting(self):
+        """
+        Update the fitting label for available or not
+        """
         if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
             self.Label_Fitting.setText(f"Fitting file available")
             self.Label_Fitting.setStyleSheet('color: green;')
@@ -730,6 +743,9 @@ class DRAGyS(QWidget):
 # =====================  Condition Buttons =========================
 # ==================================================================
     def Clickable_Buttons(self):
+        """
+        Manages the possibility of clicking on buttons.
+        """
         if os.path.exists(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"):
             self.Show_disk_PhF_button.setEnabled(True)
             self.Show_img_PhF_button.setEnabled(True)
@@ -744,6 +760,14 @@ class DRAGyS(QWidget):
 # =====================    Image Display   =========================
 # ==================================================================
     def Change_View(self, img_show):
+        """
+        Manages the displayed images.
+
+        Parameters
+        ----------
+        img_show    :   int
+                        image number to display
+        """
         self.img_chose    = self.all_img[img_show]
         self.thresh_chose = self.all_thresh[img_show]
         try:
@@ -757,6 +781,14 @@ class DRAGyS(QWidget):
         self.Zoom_Slider_Update(self.ZoomSlider.value())
 
     def Init_image(self, file_path):
+        """
+        Initializes images
+
+        Parameters
+        ----------
+        file_path   :   str
+                        full path to the fits file
+        """
         [self.img_0,    self.img_1,    self.img_2,    self.img_3,    self.img_4,    self.img_5], [self.thresh_0, self.thresh_1, self.thresh_2, self.thresh_3, self.thresh_4, self.thresh_5], self.Data_Type = Tools.Images_Opener(file_path)
         self.DataTypeLabel.setText((self.Data_Type).replace('_', ' ') + "?")
         PixelScale      = float(self.pixelscale_entry.value())
@@ -781,6 +813,14 @@ class DRAGyS(QWidget):
         self.Y_StarPosition.setValue(float(len(self.img_0)/2))
 
     def Zoom_Slider_Update(self, value):
+        """
+        Controls the zoom on displayed image
+
+        Parameters
+        ----------
+        value   :   float
+                    arbitrary image zoom size
+        """
         if self.Image_Displayed:
             PixelScale = float(self.pixelscale_entry.value())
             size  = len(self.img_0) * 100/value
@@ -795,7 +835,7 @@ class DRAGyS(QWidget):
 # ==================================================================
     def FittingType(self):
         """
-        When click on "Polarized/Total Fitting", to update displayed parameters
+        Called when click on "Polarized/Total Fitting", to update displayed parameters
         """
         if self.fit_type   == 'Total':
             self.fit_type  =  'Polarized'
@@ -808,9 +848,7 @@ class DRAGyS(QWidget):
 
     def SavedParams(self):
         """ 
-        When open a new disk file
-        When compute fitting is done
-        When click on "Polarized/Total Fitting", to update displayed parameters
+        Called when open a new disk file or when compute fitting is done or when click on "Polarized/Total Fitting", to update displayed parameters
         """
         try :
             with open(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit', 'rb') as fichier:
@@ -823,7 +861,7 @@ class DRAGyS(QWidget):
 
     def UpdateParams(self):
         """
-        When one parameter is modified
+        Called when one parameter is modified
         """
         self.incl     = np.radians(float(self.InclinationLine.value()))
         self.D_incl   = np.radians(float(self.ErrInclinationLine.value()))
@@ -844,9 +882,7 @@ class DRAGyS(QWidget):
 
     def UpdateFitting(self):
         """
-        When open a new disk file
-        When compute fitting is done
-        When click on "Polarized/Total Fitting", to update displayed parameters 
+        Called when open a new disk file or when compute fitting is done or when click on "Polarized/Total Fitting", to update displayed parameters 
         """
         self.InclinationLine.setValue(np.round(np.degrees(self.incl),2))
         self.ErrInclinationLine.setValue(np.round(np.degrees(self.D_incl),2))
@@ -862,6 +898,14 @@ class DRAGyS(QWidget):
         self.ErrPowerLawAlphaLine.setValue(np.round(self.D_alpha, 3))
 
     def on_check_Star_Position(self, state):
+        """
+        Controls the star position
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state ==  2:
             self.InputStar = True
             self.X_StarPosition.setEnabled(True)
@@ -874,6 +918,9 @@ class DRAGyS(QWidget):
             self.Y_StarPosition.setEnabled(False)
 
     def Show_Fitting(self):
+        """
+        Displays a second PyQt window to show image and fitted ellipse with detected maxima
+        """
         if not self.Fitting or not self.Fitting.isVisible():
             try:
                 self.Fitting_figure.clear()  # Nettoyer la figure
@@ -911,6 +958,9 @@ class DRAGyS(QWidget):
             self.Fitting.show()
 
     def Launch_Filtering_Data(self):
+        """
+        Setup and launch the brightness maxima detection on a second PyQt window
+        """
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.value())
         x_min, x_max = x_min/PixelScale + len(self.img_0)/2, x_max/PixelScale + len(self.img_0)/2
@@ -927,6 +977,14 @@ class DRAGyS(QWidget):
 # ===================    Extraction Zone   =========================
 # ==================================================================
     def Ring_Adjust_2(self, state):
+        """
+        Controls if the extraction zone is displayed or not
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 0:
             self.CheckEZ = False
             self.R_adjustement.setChecked(False)
@@ -943,7 +1001,11 @@ class DRAGyS(QWidget):
             self.Extraction_Zone()
             
     def Extraction_Zone(self):
+        """
+        Compute the extraction zone using displayed geometric parameters
+        """
         if self.CheckEZ:
+            
             if self.Display_EZ:
                 self.ellipse_in.remove()
                 self.ellipse_out.remove()
@@ -964,6 +1026,16 @@ class DRAGyS(QWidget):
             self.Display_EZ = True
 
     def Ellipse(self, R, pixelscale):
+        """
+        Compute ellipses at a given radius using geometric parameters and taking into account the pixelscale
+
+        Parameters
+        ----------
+        R           :   float
+                        Radius in au
+        pixelscale  :   float
+                        pixelscale in arcsec/pixel
+        """
         [Xc, Yc, _, _, _, _, _] = Tools.Load_Structure(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit', Type='Ellipse')
         xs = ys = len(self.img_0)/2
         yc_p, xc_p = Tools.Orthogonal_Prejection((xs, ys), (Yc, Xc), np.pi/2 - self.PA)
@@ -981,6 +1053,9 @@ class DRAGyS(QWidget):
         return y_rot, x_rot
     
     def Compute_Side(self):
+        """
+        Compute left and right side of the disk with respect to the position angle
+        """
         Side = np.zeros_like(self.img_0)
         Side_imshow = np.zeros((len(self.img_0), len(self.img_0), 3), dtype=np.uint8)
         x0 = y0 = len(self.img_0)/2
@@ -999,6 +1074,8 @@ class DRAGyS(QWidget):
 # ==================================================================
 
     def Change_total_polarized(self):
+        """Control how the SPF file will be saved '.tspf' if 'Total' or '.pspf if 'Polarized' 
+        """
         if self.SPF_Type_button.text() =='Polarized':
             self.SPF_Type_button.setText('Total')
             self.img_type = 'Total'
@@ -1009,7 +1086,11 @@ class DRAGyS(QWidget):
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
 
+
     def Run_SPF(self):
+        """
+        Setup and launch the SPF computation on the defined extraction zone and spf file '.tspf' or '.pspf'
+        """
         distance   = float(self.distance_entry.value())
         R_in       = float(self.R_in_entry.value())
         R_out      = float(self.R_out_entry.value())
@@ -1048,6 +1129,9 @@ class DRAGyS(QWidget):
 # ==================================================================
 
     def Show_disk_PhaseFunction(self):
+        """
+        Displays SPF in Total and/or Polarized intensity with Degree of Polarization if both are computed.
+        """
         self.NormType    = '90'
         self.LBCorrected = True
         self.ShowSide    = True
@@ -1099,6 +1183,14 @@ class DRAGyS(QWidget):
         self.Disk_PhF.show()
 
     def NormalizeCheck(self, state):
+        """
+        Controls if the SPF are normalized
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 2:
             self.NormType = '90'
             self.ax_Disk_PhF_I.autoscale()
@@ -1108,6 +1200,14 @@ class DRAGyS(QWidget):
         self.Update_SPF()
     
     def LBCheck(self, state):
+        """
+        Controls if the Limb Brightenong effect is corrected or not
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 2:
             self.LBCorrected = True
         else:
@@ -1115,6 +1215,14 @@ class DRAGyS(QWidget):
         self.Update_SPF()
         
     def SideCheck(self, state):
+        """
+        Controls if SPF for each sides are displayed or not
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 2:
             self.ShowSide = True
         else:
@@ -1122,6 +1230,14 @@ class DRAGyS(QWidget):
         self.Update_SPF()
     
     def LogCheck(self, state):
+        """
+        Controls if the SPF are in log scale
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 2:
             self.ax_Disk_PhF_I.set_yscale('log')
             self.ax_Disk_PhF_PI.set_yscale('log')
@@ -1131,6 +1247,14 @@ class DRAGyS(QWidget):
         self.Update_SPF()
 
     def MCFOSTCheck(self, state):
+        """
+        Controls if the MCFOST SPF is displayed or not
+
+        Parameters
+        ----------
+        state   :   int
+                    PyQt Checkbox value (= 2 if checked)
+        """
         if state == 2:
             self.ShowMCFOST = True
             self.ShowNormalized = True
@@ -1143,6 +1267,9 @@ class DRAGyS(QWidget):
         self.Update_SPF()
 
     def Update_SPF(self):
+        """
+        Update SPF displayed with respect to all checkbox (Normalize, Limb Brightening, Side, Log, MCFOST)
+        """
         self.ax_Disk_PhF_I.cla()
         self.ax_Disk_PhF_PI.cla()
         self.ax_Disk_DoP.cla()
@@ -1183,7 +1310,7 @@ class DRAGyS(QWidget):
             self.D_aDoP = self.D_eDoP = self.D_wDoP = 0
 
         if self.ShowMCFOST:
-            MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, MCFOST_Err_I, MCFOST_Err_PI, MCFOST_Err_DoP = Tools.MCFOST_PhaseFunction('/'.join(self.file_path.split('/')[:-2]), self.file_name[:-5], True)
+            MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, MCFOST_Err_I, MCFOST_Err_PI, MCFOST_Err_DoP = Tools.MCFOST_PhaseFunction('/'.join(self.file_path.split('/')[:-2]), True)
             if self.TSPF:
                 self.I_MCFOST_Displayed   = self.ax_Disk_PhF_I.errorbar( MCFOST_Scatt, np.abs(MCFOST_I),   color='purple', label='MCFOST', alpha=0.4, ls='dashed')
             if self.PSPF:
@@ -1236,6 +1363,9 @@ class DRAGyS(QWidget):
         self.canvas_Disk_PhF.draw()
 
     def Show_img_PhF(self):
+        """
+        Displays normalized SPF, corrected and uncorrected from Limb Brightening, with fits image and extraction zone
+        """
         try:
             Fig_img_phF.clear()  # Nettoyer la figure
         except:
@@ -1297,7 +1427,7 @@ class DRAGyS(QWidget):
         ax_phF.errorbar(Scatt, PI, xerr=Err_Scatt, yerr=np.abs(Err_PI), marker='.', capsize=2, color='black', label='LB uncorrected', ls='dashed', alpha=0.2)
         ax_phF.errorbar(Scatt, PI_LB,  xerr=Err_Scatt, yerr=np.abs(Err_PI_LB), marker='.', capsize=2, color='black', label='LB corrected')
         if 'MCFOST' in self.file_name:
-            MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, Err_MCFOST_I, Err_MCFOST_PI, Err_MCFOST_DoP = Tools.MCFOST_PhaseFunction('/'.join(self.file_path.split('/')[:-2]), self.file_name[:-5], self.normalization)
+            MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, Err_MCFOST_I, Err_MCFOST_PI, Err_MCFOST_DoP = Tools.MCFOST_PhaseFunction('/'.join(self.file_path.split('/')[:-2]), self.normalization)
             NormMCFOSTI  = np.interp(90, MCFOST_Scatt, MCFOST_I)
             NormMCFOSTPI = np.interp(90, MCFOST_Scatt, MCFOST_PI)
             MCFOST_I  = MCFOST_I/NormMCFOSTI
@@ -1325,6 +1455,9 @@ class DRAGyS(QWidget):
         self.Img_PhF.show()
 
     def Open_Header(self):
+        """
+        Displays Header of the fits file
+        """
         with fits.open(self.file_path) as hdul:
             header = hdul[0].header
             header_text = repr(header)
@@ -1332,6 +1465,9 @@ class DRAGyS(QWidget):
             self.h_refeader_window.show()
     
     def LaunchAzimuthRemover(self):
+        """
+        Launch PyQt window for removing some angle where you don not want to extract the SPF
+        """
         (x_min, x_max) = self.ax.get_xlim() 
         PixelScale = float(self.pixelscale_entry.value())
         x_min, x_max = x_min/PixelScale + len(self.img_chose)/2, x_max/PixelScale + len(self.img_chose)/2
@@ -1340,7 +1476,13 @@ class DRAGyS(QWidget):
         self.AzimuthalAngle = np.array(AzimuthWindow.Azimuth.flatten())
 
 class HeaderWindow(QWidget):
+    """
+    A class to open secondary PyQt window to display fits file header
+    """
     def __init__(self, header_text):
+        """
+        Open fits file header
+        """
         super().__init__()
         self.setWindowTitle('FITS Header')
         self.setGeometry(100, 100, 600, 400)
@@ -1354,7 +1496,25 @@ class HeaderWindow(QWidget):
         self.setLayout(layout)
 
 class AzimuthEllipseApp(QDialog):
+    """
+    A class to open a secondary PyQt window to remove Azimuth angle from SPF computation
+
+    Parameters
+    ----------
+
+    image           :   numpy.ndarray
+                        fits image
+    threshold       :   float
+                        threshold for SymLogNorm in imshow function to avoid vmin > vmax if LogNorm...
+    Data_Type       :   str
+                        change imshow norm to colors.SymLogNorm() if Data_Type=="MCFOST_Data"
+    x_min, x_max    :   float
+                        define the image size with respect to zoom value defined in the main PyQt window
+    """
     def __init__(self, image, threshold, Data_Type, x_min, x_max):
+        """
+        initializes the secondary window
+        """
         super().__init__()
 
         self.setWindowTitle('Suppression d\'azimut sur ellipse')
@@ -1411,6 +1571,9 @@ class AzimuthEllipseApp(QDialog):
         self.setLayout(main_layout)
 
     def SaveAzimuth(self):
+        """
+        save azimuth angle to use during the SPF computation
+        """
         remaining_angles = self.get_remaining_angles()
         for start, end in remaining_angles:
             self.azmask += list(np.argwhere(np.logical_and(self.Azimuth>=start, self.Azimuth<=end)))
@@ -1421,7 +1584,9 @@ class AzimuthEllipseApp(QDialog):
         self.accept()
 
     def draw_ellipse(self):
-        """Tracer l'ellipse à chaque mise à jour"""
+        """
+        Plots ellipse at each update
+        """
         self.ax.clear()
         if self.Data_Type == "MCFOST_Data":
             self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
@@ -1447,7 +1612,15 @@ class AzimuthEllipseApp(QDialog):
         self.canvas.draw()
 
     def get_remaining_angles(self):
-        """Retourner la liste des intervalles d'angles restants (azimutaux)"""
+        """
+        Return list of remaining azimuthal angle intervals
+
+        Returns
+        -------
+
+        list
+            list of remaining azimuthal angle intervals
+        """
         full_circle = [(0, 360)]
         removed_intervals = [(w.theta1, w.theta2) for w in self.removed_intervals]
 
@@ -1469,13 +1642,17 @@ class AzimuthEllipseApp(QDialog):
         return full_circle
 
     def on_click(self, event):
-        """Lorsque l'utilisateur clique sur la figure"""
+        """
+        Called when click on figure
+        """
         self.x1, self.y1 = event.xdata, event.ydata
         if self.x1 is not None and self.y1 is not None:
             self.is_drawing = True
 
     def on_release(self, event):
-        """Lorsque l'utilisateur relâche la souris"""
+        """
+        Called when click release
+        """
         if self.is_drawing:
             self.x2, self.y2 = event.xdata, event.ydata
             if self.x1 is not None and self.y1 is not None and self.x2 is not None and self.y2 is not None:
@@ -1495,7 +1672,9 @@ class AzimuthEllipseApp(QDialog):
             self.draw_ellipse()
 
     def on_motion(self, event):
-        """Lorsque l'utilisateur déplace la souris en maintenant le clic"""
+        """
+        Called hen the user moves the mouse while holding down the click
+        """
         if self.is_drawing and self.x1 is not None and self.y1 is not None and event.xdata is not None and event.ydata is not None:
             angle1 = np.degrees(np.arctan2(self.y1, self.x1))
             angle2 = np.degrees(np.arctan2(event.ydata, event.xdata))
@@ -1510,7 +1689,15 @@ class AzimuthEllipseApp(QDialog):
             self.draw_ellipse()
 
     def add_to_history(self, angle1, angle2):
-        """Ajouter une suppression à l'historique avec un bouton d'annulation"""
+        """
+        Add a deletion to the history with an undo button
+
+        Parameters
+        ----------
+
+        angle1, angle2      :   float
+                                azimuth supression interval limits 
+        """
         hbox = QHBoxLayout()
 
         label = QLabel(f"Suppression: {round(angle1)}° - {round(angle2)}°")
@@ -1522,13 +1709,55 @@ class AzimuthEllipseApp(QDialog):
         self.history_layout.addLayout(hbox)
 
     def undo_removal(self, angle1, angle2, hbox):
-        """Annuler une suppression d'azimut"""
+        """
+        Cancel azimuth deletion
+
+        Parameters
+        ----------
+
+        angle1, angle2      :   float
+                                azimuth supression interval limits 
+        hbox                :   PyQt.QHBoxLayout
+                                Layout where azimuth angle range are displayed
+        """
         self.removed_intervals = [w for w in self.removed_intervals if not (round(w.theta1) == round(angle1) and round(w.theta2) == round(angle2))]
         for i in reversed(range(hbox.count())):
             hbox.itemAt(i).widget().deleteLater()
         self.draw_ellipse()
 
 class FilteringWindow(QDialog):
+    """
+    A class to detect maxima and allow filtering of some spurious points
+    
+    Parameters
+    ----------
+
+    disk_name       :   str
+                        fits file name without extension
+
+    img_name        :   str
+                        Type of data "Polarized" or "Total", to save fitting data in '.pfit' or '.tfit' respectively
+
+    image           :   numpy.ndarray
+                        fits image
+
+    threshold       :   float
+                        threshold for SymLogNorm in imshow function to avoid vmin > vmax if LogNorm...
+
+    Data_Type       :   str
+                        change imshow norm to colors.SymLogNorm() if Data_Type=="MCFOST_Data"
+
+    x_min, x_max    :   float
+                        define the image size with respect to zoom value defined in the main PyQt window
+
+    r_beam          :   float
+                        radius of the beam size ~lambda/D with lambda the wavelength and D the telescope diameter. Used to homogenize peak detection on the ellipse
+
+    folderpath      :   str
+                        full path to the saving folder (where all fitting and spf data are saved) displayed on top left of the main window
+
+    """
+
     def __init__(self, disk_name, img_name, image, threshold, Data_Type, x_min, x_max, r_beam, folderpath, parent=None):
         super(FilteringWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
@@ -1549,6 +1778,9 @@ class FilteringWindow(QDialog):
         self.initUI()
 
     def initUI(self):
+        """
+        Setup the secondary PyQt window for filtering peak detection
+        """
         self.setWindowTitle('Filtering Pixel position Data Window')
         try:
             self.Filtering_Fig.clear()  # Nettoyer la figure
@@ -1844,6 +2076,17 @@ class FilteringWindow(QDialog):
         self.Change_Fit(1, 'None')
 
     def Change_Fit(self, value, Type):
+        """
+        Update the peak detected with respect to filters value
+
+        Parameters
+        ----------
+
+        value       :   int
+                        value from slider
+        Type        :   str
+                        define the type of filter whose value is to be changed
+        """
         if Type=='Gaussian':
             self.gaussian_value = value /100
             self.Gaussian_value_Label.setText(str(self.gaussian_value))
@@ -1908,12 +2151,16 @@ class FilteringWindow(QDialog):
         self.Filtering_Canvas.draw()
 
     def on_press(self, event):
-        """Commencer un nouveau tracé lorsque le bouton de la souris est enfoncé"""
+        """
+        Start a new trace when the mouse button is pressed down
+        """
         self.is_drawing = True
         self.points = [(event.xdata, event.ydata)]  # Initialiser avec le premier point
 
     def on_release(self, event):
-        """Terminer le tracé lorsque le bouton de la souris est relâché"""
+        """
+        End trace when mouse button is released
+        """
         self.is_drawing = False
 
         if len(self.points) > 2:  # S'assurer qu'il y a au moins 3 points pour former une zone
@@ -1942,7 +2189,9 @@ class FilteringWindow(QDialog):
         self.Filtering_Canvas.draw()
 
     def on_motion(self, event):
-        """Tracer en continu pendant que la souris se déplace"""
+        """
+        Continuous drawing as the mouse moves
+        """
         if self.is_drawing and event.xdata is not None and event.ydata is not None:
             # Ajouter le point actuel à la liste
             self.points.append((event.xdata, event.ydata))
@@ -1954,20 +2203,31 @@ class FilteringWindow(QDialog):
             self.Filtering_Canvas.draw()
 
     def remove_points_in_polygon(self, polygon_points):
-        """Supprimer les points du nuage qui se trouvent dans le polygone dessiné."""
-        # Convertir les points du polygone en un objet Path pour la vérification
+        """
+        Delete the points inside the drawn polygon.
+
+        Parameters
+        ----------
+
+        polygon_points      :   list
+                                list of points on which to delete maxima
+        """
+        # Convert polygon points into a Path object for verification
         path = Path(polygon_points)
         
-        # Déterminer quels points du nuage sont dans le polygone
+        # Determine which points of the cloud are in the polygon
         inside = path.contains_points(self.point_cloud)
         
-        # Garder uniquement les points qui sont à l'extérieur du polygone
+        # Keep only points outside the polygon
         self.point_cloud = self.point_cloud[~inside]
         
-        # Mettre à jour l'affichage du nuage de points
+        # Update point cloud display
         self.scatter.set_offsets(self.point_cloud)
 
     def Continue(self):
+        """
+        Finish the peak fitting by estimating the geometric parameters. All points, selected points, ellipse estimates, estimated geometric parameters, their errors, the image, and filter parameters are saved in a “{TargetName}.{Type}fit” file.
+        """
         Fit_Name     = f'{self.disk_name}.{(self.img_name[0]).lower()}fit'
         x0 = y0      = int(len(self.image)/2)
         X, Y         = self.point_cloud[:, 1], self.point_cloud[:, 0]
@@ -1985,7 +2245,6 @@ class FilteringWindow(QDialog):
 
         First_Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e]
         First_Estimation     = [incl, R, H, Aspect, 1, PA]
-
 
         X_unif, Y_unif = Tools.uniform_ellipse(incl, PA, H, R, 1, R, self.r_beam, x0=x0, y0=y0, init=0)
         X = []
@@ -2031,7 +2290,8 @@ class FilteringWindow(QDialog):
             nb_points = 100
             Radius       = np.random.normal(R, np.std(Point_Offset), nb_points)
             Phi          = np.random.uniform(0, 2*np.pi, nb_points)
-            Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, Xc, Yc, incl, R, H, Aspect, 1, PA)
+            # Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, incl, R, H, 1, PA)
+            Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1, R, Phi, x0=x0, y0=y0)
             coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
             Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
             D_inclinations = np.arccos(b/a)
@@ -2073,11 +2333,11 @@ class FilteringWindow(QDialog):
         self.accept()
 
 class Launcher:
+    """
+    A class to launch the main PyQt Window of DRAGyS
+    """
     def Run():
         app = QApplication(sys.argv)
         ex = DRAGyS()  # Instancie la fenêtre principale
         ex.show()
         app.exec()  # Démarre la boucle événementielle
-
-# if __name__ == "__main__":
-#     Launcher.Run()

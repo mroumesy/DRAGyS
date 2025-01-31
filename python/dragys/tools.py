@@ -17,51 +17,6 @@ import pickle as pkl
 # ================================= Ellipse / Fitting ===================================
 # =======================================================================================
 
-def Fitting_Ring(x0, y0, X, Y, x_min, x_max, y_min, y_max, nb): # function need to be update
-    coeffs = fit_ellipse(np.array(X), np.array(Y))
-    Xc, Yc, a, b, e, PA_LSQE = cart_to_pol(coeffs)
-
-    inclination   = np.arccos(b/a)
-    PositionAngle = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
-    X_e, Y_e      = get_ellipse_pts((Xc, Yc, a, b, e, PositionAngle))
-    Height        = Height_Compute(X_e, Y_e, x0, y0)/np.sin(inclination)
-    Radius        = a
-    Aspect        = Height/Radius
-
-    incl, PosAngle, radius, h, h_r = [], [], [], [], []
-    for step in range(nb):
-        X_rand, Y_rand = [], []
-        for az in range(len(X)):
-            sigmaX = np.max([np.abs(X[az] - x_min[az]), np.abs(X[az] - x_max[az])])
-            sigmaY = np.max([np.abs(Y[az] - y_min[az]), np.abs(Y[az] - y_max[az])])
-            X_rand.append(np.random.normal(X[az], sigmaX, 1)[0])
-            Y_rand.append(np.random.normal(Y[az], sigmaY, 1)[0])
-
-        coeffs = fit_ellipse(np.array(X_rand), np.array(Y_rand))
-        Xc, Yc, a, b, e, PA_LSQE = cart_to_pol(coeffs)
-        PA = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
-        PosAngle.append(PA)
-
-        i = np.arccos(b/a)
-        incl.append(i)
-
-        X_e, Y_e = get_ellipse_pts((Xc, Yc, a, b, e, PA))
-        h0 = Height_Compute(X_e, Y_e, x0, y0)/np.sin(i)
-        h.append(h0)
-        radius.append(a)
-        h_r.append(h0/a)
-
-    Error_Inclination       = np.nanstd(incl)
-    Error_PositionAngle     = np.nanstd(PosAngle)
-    Error_Height            = np.nanstd(h)
-    Error_Radius            = np.nanstd(radius)
-    Error_Aspect            = Aspect * np.sqrt((Error_Height/Height)**2 + (Error_Radius/Radius)**2)
-    Data_to_Save    = {"params"     : [inclination, Radius, Height, Aspect, 1, PositionAngle], 
-                       "Err"        : [Error_Inclination, Error_Radius, Error_Height, Error_Aspect, 0, Error_PositionAngle], 
-                       'Points'     : [X, Y, x_min, x_max, y_min, y_max], 
-                       "Ellipse"    : [Xc, Yc, X_e, Y_e, a, b, e]}
-    return Data_to_Save
-
 def fit_ellipse(x, y):
     """
     Fit the coefficients a,b,c,d,e,f, representing an ellipse described by
@@ -70,6 +25,18 @@ def fit_ellipse(x, y):
 
     Based on the algorithm of Halir and Flusser, "Numerically stable direct
     least squares fitting of ellipses'.
+
+    Parameters
+    ----------
+
+    x, y    :   numpy.ndarray
+                ellipse points
+    
+    Returns
+    -------
+
+    list
+                List of coefficients (a, b, c, d, e, f)
     """
     D1 = np.vstack([x**2, x*y, y**2]).T
     D2 = np.vstack([x, y, np.ones(len(x))]).T
@@ -94,6 +61,22 @@ def cart_to_pol(coeffs):
     respectively; e is the eccentricity; and phi is the rotation of the semi-
     major axis from the x-axis.
 
+    Parameters
+    ----------
+
+    coeffs      :   list
+                    List of coefficients (a, b, c, d, e, f)
+
+    Returns
+    -------
+
+    x0, y0      :   float
+                    ellipse center
+    ap, bp      :   float
+                    semi-major and semi-minor axes
+    e           :   float
+                    eccentricity
+    phi         :   rotation of the semi-major axis from the x-axis
     """
 
     # We use the formulas from https://mathworld.wolfram.com/Ellipse.html
@@ -150,6 +133,24 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi, liste=None):
     """
     Return npts points on the ellipse described by the params = x0, y0, ap,
     bp, e, phi for values of the parametric variable t between tmin and tmax.
+
+    Parameters
+    ----------
+
+    params      :   tuple
+                    (x0, y0, ap, bp, e, phi) respectively ellipse center position, semi-major, semi-minor axis, eccentricity, rotation of the semi-major axis from the x-axis
+    npts        :   int (optional)
+                    number of ellipse points
+    tmin, tmax  :   float
+                    limits of parametric variable (tipically 0, 2*pi)
+    liste       :   list
+                    if defined, the points of the ellipse will be defined by this list of parametric variables, and no longer as a function of tmin and tmax
+
+    Returns
+    -------
+
+    numpy.ndarray
+                    ellipse points (with ntps (or liste size) number of points)
     """
     x0, y0, ap, bp, e, phi = params
     # A grid of the parametric variable, t.
@@ -164,6 +165,55 @@ def get_ellipse_pts(params, npts=100, tmin=0, tmax=2*np.pi, liste=None):
     return x, y
 
 def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence=0.1, distance=1, width=1, threshold=None, HighPass=1, Mincut_Radius=49, Maxcut_Radius=50, nb_phi=360, method='Azimuthal'):
+    """
+    Detection of all brightness maxima on fits image using differents methods, and for many differents filter values
+
+    Parameters
+    ----------
+
+    image               :   ndarray
+                            fits image
+
+    R_max               :   float (optional)
+                            set a maximum radius for maxima detection
+
+    gaussian_filter     :   float (optional)
+                            set sigma value for gaussian filter
+
+    smooth_filter       :   float (optional)
+                            set sigma value for smoothing profiles
+
+    prominence          :   float or ndarray or sequence (optional)
+                            Required prominence of peaks. Either a number, None, an array matching x or a 2-element sequence of the former. The first element is always interpreted as the minimal and the second, if supplied, as the maximal required prominence. (see scipy.signal.find_peaks documentation)
+
+    distance            :   float (optional)
+                            Required minimal horizontal distance (>= 1) in samples between neighbouring peaks. Smaller peaks are removed first until the condition is fulfilled for all remaining peaks. (see scipy.signal.find_peaks documentation)
+
+    width               :   float or ndarray or sequence (optional)
+                            Required width of peaks in samples. Either a number, None, an array matching x or a 2-element sequence of the former. The first element is always interpreted as the minimal and the second, if supplied, as the maximal required width. (see scipy.signal.find_peaks documentation)
+
+    threshold           :   float or ndarray or sequence (optional)
+                            Required threshold of peaks, the vertical distance to its neighboring samples. Either a number, None, an array matching x or a 2-element sequence of the former. The first element is always interpreted as the minimal and the second, if supplied, as the maximal required threshold. (see scipy.signal.find_peaks documentation)
+
+    Mincut_Radius       :   float (optional)
+                            set minimum radius for maxima detection
+                            
+    Maxcut_Radius       :   float (optional)
+                            set maximum radius for maxima detection
+
+    nb_phi              :   float (optional)
+                            set number of azimuth angles used for radial profile extration and maxima detection
+
+    method              :   str (optional)
+                            chose maxima detection method, the main method is “Azimuthal” but others are possible
+
+    Returns
+    -------
+
+    X, Y        :   list
+                    position of brightness peak detected and filtered, usable for ellipse fitting
+    """
+    
     X, Y  = [], []
     image = ndimage.gaussian_filter(image , sigma = gaussian_filter)
 
@@ -276,6 +326,40 @@ def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence
     return X, Y
 
 def ellipse(incl, PA, h, r, chi, R, phi, x0=0, y0=0):
+    """
+    Compute ellipse using protoplanetary disk geometric parameters
+
+    Parameters
+    ----------
+
+    incl        :   float
+                    ellipse incl in radians
+
+    PA          :   float
+                    ellipse Position Angle in radians
+
+    h           :   float
+                    Disk Scattering Surface Height in pixels
+
+    r           :   float
+                    Disk Scattering Surface Midplane Radius in pixels
+
+    chi         :   float
+                    Disk Scattering Surface flaring Exponent
+
+    R           :   float
+                    Radius where we begin the extraction  in pixels
+
+    phi         :   ndarray
+                    array of parametric variable (typically np.array(0, 2*np.pi, 361))
+
+    x0, y0      :   float (optional)
+                    ellipse center position in pixels
+
+    Returns
+    -------
+    (x, y) coordinates of ellipse points
+    """
     x     = R * np.sin(phi)
     y     = h * (R/r)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
     x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA)
@@ -285,14 +369,39 @@ def ellipse(incl, PA, h, r, chi, R, phi, x0=0, y0=0):
 def uniform_ellipse(incl, PA, Height, Radius, chi, R, space, x0=0, y0=0, init=0):
     """
     Compute uniformly space points along ellipse.
-    :param incl: ellipse incl
-    :param PA: ellipse Position Angle
-    :param Height: Disk Scattering Surface Height
-    :param Radius: Disk Scattering Surface Midplane Radius
-    :param chi: Disk Scattering Surface flaring Exponent
-    :param R: Radius where we begin the extraction 
-    :param space: space between one azimuth and the next one. Usually equal to 2 * PSF radius
-    :return: (x, y) coordinates of ellipse
+
+    Parameters
+    ----------
+
+    incl        :   float
+                    ellipse incl in radians
+    PA          :   float
+                    ellipse Position Angle in radians
+
+    Height      :   float
+                    Disk Scattering Surface Height in pixels
+
+    Radius      :   float
+                    Disk Scattering Surface Midplane Radius in pixels
+
+    chi         :   float
+                    Disk Scattering Surface flaring Exponent
+
+    R           :   float
+                    Radius where we begin the extraction  in pixels
+
+    space       :   float
+                    space between one azimuth and the next one. Usually equal to 2 * PSF radius
+    
+    x0, y0      :   float (optional)
+                    ellipse center position in pixels
+    
+    init        :   float (optional)
+                    angle where to begin ellipse in radians
+    
+    Returns
+    -------
+    (x, y) coordinates of homogenized ellipse points
     """
     # Étape 1 : Discrétiser l'ellipse avec une haute résolution
     t = np.linspace(0, 2 * np.pi, 10000)  # Résolution élevée pour une approximation précise
@@ -309,7 +418,7 @@ def uniform_ellipse(incl, PA, Height, Radius, chi, R, space, x0=0, y0=0, init=0)
     uniform_y = np.interp(uniform_distances, np.hstack(([0], cumulative_distances)), y)
     return uniform_x, uniform_y
 
-def Random_Ellipse(Radius, Phi, xs, ys, xe, ye, incl, R, H, Aspect, Chi, PA):
+def Random_Ellipse(Radius, Phi, xs, ys, incl, R, H, Chi, PA):
     x     = Radius * np.sin(Phi)
     y     = H * (Radius/R)**Chi * np.sin(incl) - Radius * np.cos(Phi) * np.cos(incl)
     x_rot = xs + (x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA))
@@ -317,6 +426,33 @@ def Random_Ellipse(Radius, Phi, xs, ys, xe, ye, incl, R, H, Aspect, Chi, PA):
     return x_rot, y_rot
 
 def My_PositionAngle(xcenter, ycenter, x0, y0, a, b, e, PA_LSFE):
+    """
+    Compute position angle counterclockwise with respect to y-axis
+
+    Parameters
+    ----------
+
+    xcenter, ycenter    :   float
+                            image center position
+    
+    x0, y0              :   float
+                            ellipse center position
+    
+    a, b                :   float
+                            semi-major and semi-minor axis
+
+    e                   :   float
+                            eccentricity
+
+    PA_LSFE             :   float
+                            rotation of the semi-major axis from the x-axis (computed during least square fitting of ellipse)
+    
+    Returns
+    -------
+
+    float
+            Ellipse Position Angle
+    """
     Xa, Ya = get_ellipse_pts((x0, y0, a, b, e, PA_LSFE+np.pi/2), liste=[np.pi/2, 3*np.pi/2])
 
     D1 = np.sqrt((xcenter-Xa[0])**2 + (ycenter-Ya[0])**2)
@@ -335,16 +471,20 @@ def Height_Compute(x, y, xs, ys):
     Find the distance between the star and  orthogonal projection  of the equation of the line corresponding to the major axis of the ellipse
     defined by the points x, y.
 
-    Arguments :
-    - x: numpy list or array containing the x-coordinates of the points of the ellipse
-    - y: numpy list or array containing the y coordinates of the ellipse's points
+    Parameters
+    ----------
+    x, y    :   ndarray
+                list or array containing the coordinates of the points of the ellipse
 
-    Returns :
-    - tuple (a, b, c) representing the coefficients of the line ax + by + c = 0
+
+    Returns
+    -------
+
+    tuple 
+                (a, b, c) representing the coefficients of the line ax + by + c = 0
     """
     a, b, c = find_ellipse_axis_coeffs(x, y, axis='major')
     
-    # Calcul du projeté orthogonal
     x_proj = (b * (b * xs - a * ys) - a * c) / (a**2 + b**2)
     y_proj = (a * (-b * xs + a * ys) - b * c) / (a**2 + b**2)
 
@@ -356,25 +496,30 @@ def find_ellipse_axis_coeffs(x, y, axis='major'):
     Find the coefficients of the equation of the line corresponding to the major axis of the ellipse
     defined by the points x, y.
 
-    Arguments :
-    - x: numpy list or array containing the x-coordinates of the points of the ellipse
-    - y: numpy list or array containing the y coordinates of the ellipse's points
-    - axis: string to choose "major" or "minor" axis
+    Parameters
+    ----------
 
-    Returns :
-    - tuple (a, b, c) representing the coefficients of the line ax + by + c = 0
+    x, y        :   ndarray
+                    numpy list or array containing the coordinates of the points of the ellipse
+    axis        :   str
+                    choose "major" or "minor" axis
+
+    Returns
+    -------
+    tuple
+                    (a, b, c) representing the coefficients of the line ax + by + c = 0
     """
-    # Centrer les données
+    # center datas
     x_mean, y_mean = np.mean(x), np.mean(y)
     centered_x, centered_y = x - x_mean, y - y_mean
 
-    # Calculer la matrice de covariance
+    # compute the covariance matrix
     cov_matrix = np.cov(centered_x, centered_y)
 
-    # Calculer les vecteurs propres et les valeurs propres
+    # Compute eigenvectors and eigenvalues
     eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
 
-    # Trouver le vecteur propre associé à la plus petite valeur propre
+    # Find the eigenvector associated with the smallest eigenvalue
     if axis == 'major':
         axis_index = np.argmin(eigenvalues)
     else :
@@ -382,13 +527,31 @@ def find_ellipse_axis_coeffs(x, y, axis='major'):
 
     axis_vector = eigenvectors[:, axis_index]
 
-    # Calculer les coefficients de la droite
+    # Compute the coefficients of the line
     a, b = axis_vector
     c = -a * x_mean - b * y_mean
 
     return a, b, c
 
 def Load_Structure(filepath, Type='Struct'):
+    """
+    Load the fitted parameters from '.tfit' or '.pfit' files
+
+    Parameters
+    ----------
+
+    filepath    :   str
+                    full path to the '.tfit' or '.pfit' file
+
+    Type        :   str (optional)
+                    define what do you want : "Struct" for geometrical parameters and errors ; "Points" for x, y coordinates of Maxima points ; "Ellipse" for fitted ellipse coordinates
+    
+    Returns
+    -------
+
+    list
+                List of selected parameters
+    """
     with open(filepath, 'rb') as fichier:
         Loaded_Data = pkl.load(fichier)
     if Type == 'Struct':
@@ -401,9 +564,52 @@ def Load_Structure(filepath, Type='Struct'):
 # =======================================================================================
 # ============================ Scattering Phase Functions ===============================
 # =======================================================================================
-# extraction
 
 def SPF(params):
+    """
+    Compute raw SPF using geometrical parameters, extraction zone and limb brightening effet
+
+    Parameters
+    ----------
+
+    params      :   list
+                    list of parameters used for SPF extraction
+                    img (ndarray)       -   fits image
+                    distance (float)    -   target distance in parsec
+                    pixelscale (float)  -   pixelscale in arcsec/pixel
+                    (xs, ys) (float)    -   star position in pixel
+                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
+                    incl (float)        -   inclination in radian
+                    PA (float)          -   Position Angle in radian
+                    R_ref (float)       -   Reference Radius of fitted disk geometry
+                    H_ref (float)       -   Reference Height of fitted disk geometry
+                    aspect (float)      -   H_ref/R_ref
+                    alpha (float)       -   power law index for local scattering height computation
+                    D_incl (float)      -   Error on inclination in radian
+                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
+                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
+                    D_aspect (float)    -   Error on H_ref/R_ref
+                    R_in, R_out (float) -   Limits of extraction zone
+                    n_bin (int)         -   number of bins for scattering angles
+                    Phi (ndarray)       -   azimuth for scanning the disk image
+                    Type (str)          -   SPF type, if its for values or for error estimations
+    
+    Returns
+    -------
+
+    Dictionnary
+                    Data set of SPF for All the disk, and for each side : Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
+                    behind each keys []"All", "East", "West"] : 
+                    {"Scatt"        : Scatt, 
+                     "I"            : SPF, 
+                     "PI"           : SPF, 
+                     "Err_Scatt"    : D_Scatt, 
+                     "Err_I"        : D_SPF, 
+                     "Err_PI"       : D_SPF, 
+                     "LB"           : LB_effect_tot, 
+                     "Err_LB"       : D_LB_tot}
+
+    """
     [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Type] = params    
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
     R_ref = R_ref/pixelscale_au
@@ -529,6 +735,50 @@ def SPF(params):
     return Dataset
 
 def New_Beam_pSPF(params):
+    """
+    Compute raw SPF using geometrical parameters, extraction zone and limb brightening effet
+
+    Parameters
+    ----------
+
+    params      :   list
+                    list of parameters used for SPF extraction
+                    img (ndarray)       -   fits image
+                    distance (float)    -   target distance in parsec
+                    pixelscale (float)  -   pixelscale in arcsec/pixel
+                    (xs, ys) (float)    -   star position in pixel
+                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
+                    incl (float)        -   inclination in radian
+                    PA (float)          -   Position Angle in radian
+                    R_ref (float)       -   Reference Radius of fitted disk geometry
+                    H_ref (float)       -   Reference Height of fitted disk geometry
+                    aspect (float)      -   H_ref/R_ref
+                    alpha (float)       -   power law index for local scattering height computation
+                    D_incl (float)      -   Error on inclination in radian
+                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
+                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
+                    D_aspect (float)    -   Error on H_ref/R_ref
+                    R_in, R_out (float) -   Limits of extraction zone
+                    n_bin (int)         -   number of bins for scattering angles
+                    Phi (ndarray)       -   azimuth for scanning the disk image
+                    Type (str)          -   SPF type, if its for values or for error estimations
+    
+    Returns
+    -------
+
+    Dictionnary
+                    Data set of SPF for All the disk, and for each side : Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
+                    behind each keys []"All", "East", "West"] : 
+                    {"Scatt"        : Scatt, 
+                     "I"            : SPF, 
+                     "PI"           : SPF, 
+                     "Err_Scatt"    : D_Scatt, 
+                     "Err_I"        : D_SPF, 
+                     "Err_PI"       : D_SPF, 
+                     "LB"           : LB_effect_tot, 
+                     "Err_LB"       : D_LB_tot}
+
+    """
     [img_I, img_PI, distance, pixelscale, r_beam, incl, PA, aspect, alpha, D_incl, D_aspect, R_in, R_out, n_bin, Type] = params
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
 
@@ -662,6 +912,43 @@ def New_Beam_pSPF(params):
     return Dataset
 
 def Compute_SPF(params, folderpath, File_name, img_type):
+    """
+    Launch SPF computation for All side taking into account errors on geometric parameters. Multiprocessing is applied for SPF computation for each parameter errors
+    
+    Parameters
+    ----------
+    
+    params      :   list
+                    list of parameters used for SPF extraction
+                    img (ndarray)       -   fits image
+                    distance (float)    -   target distance in parsec
+                    pixelscale (float)  -   pixelscale in arcsec/pixel
+                    (xs, ys) (float)    -   star position in pixel
+                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
+                    incl (float)        -   inclination in radian
+                    PA (float)          -   Position Angle in radian
+                    R_ref (float)       -   Reference Radius of fitted disk geometry
+                    H_ref (float)       -   Reference Height of fitted disk geometry
+                    aspect (float)      -   H_ref/R_ref
+                    alpha (float)       -   power law index for local scattering height computation
+                    D_incl (float)      -   Error on inclination in radian
+                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
+                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
+                    D_aspect (float)    -   Error on H_ref/R_ref
+                    R_in, R_out (float) -   Limits of extraction zone
+                    n_bin (int)         -   number of bins for scattering angles
+                    Phi (ndarray)       -   azimuth for scanning the disk image
+                    Type (str)          -   SPF type, if its for values or for error estimations
+    
+    folderpath  :   str
+                    full path to the saving folder \DRAGyS_Results
+
+    File_name   :   str
+                    name of the fits file with extension
+    
+    img_type    :   str
+                    "Polarized" or "Total" to well save data in a appropriate filename
+    """
     with Pool(processes=7) as pool_SPF:
         resultats = pool_SPF.map(SPF, params)
     Data_tot        = resultats[0]
@@ -718,7 +1005,27 @@ def Compute_SPF(params, folderpath, File_name, img_type):
 
 # for considering beam size when extract flux
 def get_mean_value_in_circle(image, center, radius):
-    """Calcule la valeur moyenne à l'intérieur du cercle."""
+    """
+    Computes the average value inside the circle
+
+    Parameters
+    ----------
+
+    image   :   ndarray
+                fits image
+
+    center  :   float
+                pixel position
+
+    radius  :   float
+                circle radius in pixel
+
+    Returns
+    -------
+
+    float
+            :   mean value in the circle
+    """
     cx, cy = center
     y, x = np.ogrid[:image.shape[0], :image.shape[1]]
     mask = (x - cx)**2 + (y - cy)**2 <= radius**2
@@ -726,6 +1033,40 @@ def get_mean_value_in_circle(image, center, radius):
     return np.nanmean(image[mask])
 
 def BeamSpace(Radius, r_beam, PA, incl, aspect, alpha):
+    """
+    Compute coordinates and azimuthal angle of ellipse points taking into account the size of PSF
+
+    Parameters
+    ----------
+
+    Radius      :   float
+                    Ellipse radius for disk geometry equations
+
+    r_beam      :   float
+                    size of the circle PSF
+
+    PA          :   float
+                    position angle in radian
+
+    incl        :   float
+                    inclination in radian
+
+    aspect      :   float
+                    h/r of estimated disk geometry
+
+    alpha       :   float
+                    power law index for local scattering height equation
+    
+    Returns
+    -------
+    list
+                    Beam_X is x-coordinates of ellipse point spaced by a resolution element
+    list
+                    Beam_X is y-coordinates of ellipse point spaced by a resolution element
+    list
+                    Beam_Phi is the list of azimuthal angle to have ellipse point spaced by a resolution element
+ 
+    """
     Beam_X, Beam_Y, Beam_Phi= [], [], []
     for R in Radius :
         Phi = np.linspace(0, 2*np.pi -np.pi/180, 10000)
@@ -748,16 +1089,28 @@ def BeamSpace(Radius, r_beam, PA, incl, aspect, alpha):
     return Beam_X, Beam_Y, Beam_Phi
 
 def create_circular_mask(Y, X, center, radius):
+    """
+    Create a circle mask on image
+
+    Parameters
+    ----------
+
+    Y, X        :   ndarray
+                    coordinates of points
+    center      :   tuple
+                    (x0, y0) image center
+    radius      :   float
+                    circle radius
+    
+    Returns
+    -------
+    
+    ndarray
+                    circular mask
+    """
     dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
     mask = dist_from_center < radius
     return mask
-
-# Normalization
-def Same90(ref, Sca1, SPF1, Sca2, SPF2):
-    SPF1_90 = np.interp(ref, Sca1, SPF1)
-    SPF2_90 = np.interp(ref, Sca2, SPF2)
-    Same_Amp_SPF2 = SPF2 * SPF1_90/SPF2_90
-    return Same_Amp_SPF2
 
 def Normalize(Scatt, I, PI, Err_I, Err_PI, Type='Norm'):
     if Type=='Norm':
@@ -772,6 +1125,30 @@ def Normalize(Scatt, I, PI, Err_I, Err_PI, Type='Norm'):
 
 # Take into account non centered star position
 def NewScatt(R, ellipse_center, Phi, star=(0, 0)):
+    """
+    Compute Scattering angle to take into account non centered stars
+
+    Parameters
+    ----------
+
+    R               :   float
+                        Radius
+    
+    ellipse_center  :   tuple
+                        (x, y) coordinates of ellipse center
+
+    Phi             :   ndarray
+                        array of azimuthal angle to compute ellipse
+    
+    star            :   tuple
+                        (xs, ys) coordinates of star position
+    
+    Returns
+    -------
+
+    ndarray
+                        array of new scattering angle computed
+    """
     xs, ys = star
     xc, yc = ellipse_center
     xp, yp = xc + R * np.cos(Phi), yc + R * np.sin(Phi)
@@ -790,6 +1167,22 @@ def NewScatt(R, ellipse_center, Phi, star=(0, 0)):
     return New_Phi
 
 def angle_oriente_2d(v1, v2):
+    """
+    Compute oriented angle between two vectors
+    
+    Parameters
+    ----------
+
+    v1, v2  :   float
+                vectors to compute oriented angle
+    
+    Returns
+    -------
+    
+    float
+                oriented angle
+
+    """
     dot_product   = np.dot(v1, v2)
     norm_v1       = np.linalg.norm(v1)
     norm_v2       = np.linalg.norm(v2)
@@ -802,6 +1195,29 @@ def angle_oriente_2d(v1, v2):
     return oriented
 
 def Orthogonal_Prejection(star_position, ellipse_center, PA):
+    """
+    Compute orthogonal projection between star position and semi-major axis of the fitted ellipse
+
+    Parameters
+    ----------
+
+    star_position       :   tuple
+                            (xs, ys) star position
+    
+    ellipse_center      :   tuple
+                            (xc, yc) ellipse position
+    
+    PA                  :   float
+                            Position Angle in radian
+    
+    Returns
+    -------
+
+    xc_prime            :   float
+                            x-coordinate of orthogonal projection
+    yc_prime            :   float
+                            y-coordinate of orthogonal projection
+    """
     (xs, ys) = star_position
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
@@ -812,13 +1228,43 @@ def Orthogonal_Prejection(star_position, ellipse_center, PA):
     return xc_prime, yc_prime
 
 def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
+    """
+    Compute new scattering angle and orthogonal projection of non centered star system
+
+    Parameters
+    ----------
+    R                   :   float
+                            Radius
+
+    star_position       :   tuple
+                            (xs, ys) star position
+    
+    ellipse_center      :   tuple
+                            (xc, yc) ellipse position
+    
+    PA                  :   float
+                            Position Angle in radian
+
+    Phi                 :   ndarray
+                            array of azimuthal angle to compute ellipse
+    
+    
+    Returns
+    -------
+
+    New_Phi             :   ndarray
+                            array of new scattering angle computed
+
+    xc_prime            :   float
+                            x-coordinate of orthogonal projection
+
+    yc_prime            :   float
+                            y-coordinate of orthogonal projection
+    """
     (xs, ys) = star_position
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
     b = np.sin(-PA)
-    # t = ((xc - xs) * a + (yc - ys) * b) / (a * a + b * b)
-    # xc_prime = xs + t * a
-    # yc_prime = ys + t * b
     xc_prime, yc_prime = Orthogonal_Prejection(star_position, ellipse_center, PA)
     X_PA = a + xs
     Y_PA = b + ys
@@ -828,7 +1274,6 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     X_SPA = X_PA - xs
     Y_SPA = Y_PA - ys
     angle = angle_oriente_2d((X_SPA, Y_SPA), (X_SC, Y_SC))
-    # np.degrees(np.arctan2(Y_SC, X_SC))
     if 0 <= angle <= np.pi/2:
         D =   np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
     elif np.pi/2 < angle :
@@ -837,12 +1282,14 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
         D = - np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
     elif -np.pi/2 > angle:
         D =   np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
-    # D = - np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
     New_Phi = NewScatt(R, (xs + D, ys), Phi, star=(xs, ys))
     return New_Phi, xc_prime, yc_prime
 
 # Get Phase Function Data
 def Get_PhF(filename, side='All', LBCorrected=False, norm='none'):
+    """
+    Get SPF from pickle files
+    """
     with open(filename, 'rb') as fichier:
         Loaded_Data = pkl.load(fichier)
     Scatt     = np.array(Loaded_Data[side]["Scatt"])
@@ -883,7 +1330,43 @@ def Get_SPF(filename, side='All', LBCorrected=False, norm='none'):          # No
     Norm = np.interp(90, Scatt, SPF) if norm=='90' else 1
     return Scatt, SPF/Norm, LB, Err_Scatt, Err_SPF/Norm, Err_LB
 
-def MCFOST_PhaseFunction(file_path, Name, Normalization):
+def MCFOST_PhaseFunction(file_path, Normalization):
+    """
+    Get MCFOST SPF from simulated files
+
+    Parameters
+    ----------
+    file_path       :   str
+                        path to the folder that contains "data_{lambda}" and "data_dust" folders
+    
+    Normalization   :   Bool
+                        to normalized to 90° scattering angle
+    
+    Returns
+    -------
+    MCFOST_Scatt        :   ndarray
+                            MCFOST Scattering Angle
+
+    MCFOST_I            :   ndarray
+                            MCFOST total intensity SPF
+
+    MCFOST_PI           :   ndarray
+                            MCFOST polarized intensity SPF
+
+    MCFOST_DoP          :   ndarray
+                            MCFOST Degree of polarization
+
+    MCFOST_Err_I        :   ndarray
+                            Error on MCFOST total intensity SPF
+
+    MCFOST_Err_PI       :   ndarray
+                            Error on MCFOST polarized intensity SPF
+
+    MCFOST_Err_DoP      :   ndarray
+                            Error on MCFOST Degree of polarization
+
+
+    """
     if 'data_dust' not in os.listdir(file_path):
         print("No MCFOST data_dust folder here...")
         MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, MCFOST_Err_I, MCFOST_Err_PI, MCFOST_Err_DoP = [0], [0], [0], [0], [0], [0], [0]
@@ -913,6 +1396,30 @@ def MCFOST_PhaseFunction(file_path, Name, Normalization):
 # =======================================================================================
 
 def LimbBrightening(Scatt, incl, aspect, chi):
+    """
+    Compute Limb Brightening
+
+    Parameters
+    ----------
+
+    Scatt       :   ndarray
+                    Scattering Angle
+    
+    incl        :   float
+                    inclination in radian
+            
+    aspect      :   float
+                    Height/Radius ratio
+    
+    chi         :   float
+                    scattering height surface power-law index
+
+    Returns
+    -------
+
+    ndarray     
+                Limb Brightening effect with respect to the scattering angle
+    """
     return (np.cos(aspect) * np.sin(aspect*chi-aspect)) / (np.cos(aspect)*np.sin(aspect*chi-aspect) + np.cos(incl)*np.cos(aspect*chi-aspect) - np.sin(aspect*chi)*np.cos(np.radians(Scatt)))
 
 # =======================================================================================
@@ -920,6 +1427,25 @@ def LimbBrightening(Scatt, incl, aspect, chi):
 # =======================================================================================
 
 def Images_Opener(filepath):
+    """
+    Open data cube fits files for several types of data
+
+    Parameters
+    ----------
+
+    filepath        :   str
+                        path to the fits file
+    
+    Returns
+    -------
+
+    IMG         :   list
+                    list of 6 images data (all equal to zeros arrays except if data are founded in fits file)
+    Tresh       :   list
+                    list of thresholds from images to avoid LogNorm error and use SymLogNorm (useful for MCFOST data !!)
+    Data_Type   :   str
+                    Check type of image, if its MCFOST image, it will use SymLogNorm instead of LogNorm
+    """
     img    = fits.getdata(filepath)
     nb_dim = len(np.shape(img))
     img_0,    img_1,    img_2,    img_3,    img_4,    img_5    = None, None, None, None, None, None
@@ -972,10 +1498,31 @@ def Images_Opener(filepath):
     return IMG, Thresh, Data_Type
 
 def moving_average(data, window_size):
+    """
+    Compute smooth profile
+
+    Parameters
+    ----------
+
+    data            :   ndarray
+                        radial profile
+
+    window_size     :   float
+                        smooth parameter
+    
+    Returns
+    -------
+
+    smoothed_data   :   ndarray
+                        smoothed radial profile   
+    """
     smoothed_data = np.convolve(data, np.ones(window_size)/window_size, mode='same')
     return smoothed_data
 
 def DiskDistances():
+    """
+    Stock Distance of targets that I have
+    """
     D = [160.3, 144.0, 145.5, 158.4, 156.3, 184.4, 184.4, 185.2, 129.4, 157.2, 157.2, 180.7, 180.7, 190.2, 142.2, 142.2, 323.82, 401.07]
     Distances = {}
     Folder = 'C:\\Users\mroum\OneDrive\Bureau\PhD\Data\DESTINYS/'
@@ -1008,6 +1555,9 @@ def DiskDistances():
     return Distances
 
 def Get_Distance(Distances, Path):
+    """
+    Get Distance of target that I have
+    """
     Folder = '/'.join(Path.split('/')[:-1]) + '/'
     File   = Path.split('/')[-1]
     FILE = File.replace(' ', '').replace('_', '').replace('-', '').upper()
@@ -1020,31 +1570,3 @@ def Get_Distance(Distances, Path):
             KEYS = keys.replace(' ', '').replace('_', '').replace('-', '').upper()
             if KEYS in FILE :
                 return Distances[keys]
-
-# =======================================================================================
-# ==============================    Display / Usable     ================================
-# =======================================================================================
-
-def Fitting_Results(filename, data_type, cmap="gnuplot"):
-    fig, ax = plt.subplots(1, 1)
-
-    if os.path.exists("config.json"):
-        with open("config.json", "r") as f:
-            config = json.load(f)
-            if "save_directory" in config and os.path.isdir(config["save_directory"]):
-                folderpath = config["save_directory"]
-            else :
-                print("No saving folder... please run DRAGyS one time and define a saving folder before using this function !")
-                sys.exit()
-    else :
-        print("No saving folder... please run DRAGyS one time and define a saving folder before using this function !")
-        sys.exit()
-    
-    with open(f"{folderpath}/DRAGyS_Results/{os.path.splitext(filename)[0]}/", "r") as fitting:
-        img                                       = fitting['Data']
-        [incl,     R,   H,   Aspect,   Chi,   PA] = fitting['params']
-        [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA] = fitting['Err']
-        [X, Y, All_X, All_Y]                      = fitting['Points']
-        Ellipse_points                            = fitting['Ellipse']
-    
-    ax.imshow(img)
