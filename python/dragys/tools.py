@@ -1,13 +1,9 @@
 import sys
 import os
-sys.path.append(os.getcwd())
 import numpy as np
 from astropy.io import fits
 from scipy import ndimage, signal
-
 import matplotlib.pyplot as plt
-import json
-
 from multiprocessing import Pool
 import pickle as pkl
 
