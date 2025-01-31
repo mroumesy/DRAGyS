@@ -23,6 +23,15 @@ In a python file, you can now import _dragys_ and launch the GUI. Typically, ent
         dragys.Launcher.Run()
 line *\_\_name\_\_ == "\_\_main\_\_":* ensures that the window will not open multiple times due to multiprocessing during SPF computation.
 
+If _"no module named 'dragys'_ error occurs, just run the **run_dragys_backup.py** file from _\python\dragys_ folder.
+
+If some PyQt6 error occurs, try this in a bash, and reload your terminal
+
+    sudo apt update
+    sudo apt install libegl1-mesa
+
+
+
 The tool first asks you to define a backup folder. It will create a “DRAGyS_Results” folder to store the fitting and SPF files of the analyzed disks.
 # Attribution
 
