@@ -691,6 +691,7 @@ class DRAGyS(QWidget):
 # ==================================================================
 # =====================     File Finder    =========================
 # ==================================================================
+
     def update_label_fitting(self):
         """
         Update the fitting label for available or not
@@ -778,9 +779,9 @@ class DRAGyS(QWidget):
         except:
             SERGE = "Scattering Extraction from Ring Geometry Estimation"
         if self.Data_Type == "MCFOST_Data":
-            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
         else :
-            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="gnuplot", norm=colors.LogNorm())
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.LogNorm())
         self.Zoom_Slider_Update(self.ZoomSlider.value())
 
     def Init_image(self, file_path):
@@ -946,9 +947,9 @@ class DRAGyS(QWidget):
             [X, Y, all_X, all_X]        = Tools.Load_Structure(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", Type='Points')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
             if self.Data_Type == "MCFOST_Data":
-                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
             else :
-                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="gnuplot", norm=colors.LogNorm())
+                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
             ax.scatter((Y-center)*PixelScale, (X-center)*PixelScale, marker='.', color='blue') # given points
             ax.plot((Y_e-center)*PixelScale,  (X_e-center)*PixelScale, label="ellipse fit", color='blue')
@@ -1089,7 +1090,6 @@ class DRAGyS(QWidget):
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
 
-
     def Run_SPF(self):
         """
         Setup and launch the SPF computation on the defined extraction zone and spf file '.tspf' or '.pspf'
@@ -1130,7 +1130,6 @@ class DRAGyS(QWidget):
 # ==================================================================
 # ===================    Display Results   =========================
 # ==================================================================
-
     def Show_disk_PhaseFunction(self):
         """
         Displays SPF in Total and/or Polarized intensity with Degree of Polarization if both are computed.
@@ -1416,9 +1415,9 @@ class DRAGyS(QWidget):
         size = len(self.img_0)
         arcsec_extent = size/2 * pixelscale
         if self.Data_Type == 'MCFOST_Data':
-            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
         else :
-            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="gnuplot", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
 
         X_in, Y_in = self.Ellipse(R_in, pixelscale)
         X_out, Y_out = self.Ellipse(R_out, pixelscale)
@@ -1592,9 +1591,9 @@ class AzimuthEllipseApp(QDialog):
         """
         self.ax.clear()
         if self.Data_Type == "MCFOST_Data":
-            self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
+            self.ax.imshow(self.image, origin='lower', cmap="inferno", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
         else :
-            self.ax.imshow(self.image, origin='lower', cmap="gnuplot", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
+            self.ax.imshow(self.image, origin='lower', cmap="inferno", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
         self.ax.set_xlim(-self.img_width, self.img_width)
         self.ax.set_ylim(-self.img_width, self.img_width)
         
@@ -2070,9 +2069,9 @@ class FilteringWindow(QDialog):
         
         self.Filtering_ax.set_facecolor('k')
         if self.Data_Type == "MCFOST_Data":
-            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='inferno', norm=colors.SymLogNorm(linthresh=self.threshold))
         else :
-            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='gist_heat', norm=colors.LogNorm())
+            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='inferno', norm=colors.LogNorm())
         self.Filtering_ax.set_xlim(self.x_min, self.x_max)
         self.Filtering_ax.set_ylim(self.x_min, self.x_max)
         self.scatter = self.Filtering_ax.scatter(self.point_cloud[:, 0], self.point_cloud[:, 1], edgecolor='k', color='cyan', s=5)
@@ -2095,9 +2094,9 @@ class FilteringWindow(QDialog):
             self.Gaussian_value_Label.setText(str(self.gaussian_value))
             self.displayed_image.remove()
             if self.Data_Type == "MCFOST_Data":
-                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.SymLogNorm(linthresh=self.threshold))
+                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='inferno', norm=colors.SymLogNorm(linthresh=self.threshold))
             else :
-                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='gist_heat', norm=colors.LogNorm())
+                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='inferno', norm=colors.LogNorm())
 
         elif Type=='Smooth':
             self.smooth_value = value

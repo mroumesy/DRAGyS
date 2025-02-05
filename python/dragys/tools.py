@@ -1470,7 +1470,7 @@ def Images_Opener(filepath):
         Image_4 = np.abs(np.sqrt(Image_1**2 + Image_2**2))
         Image_5 = np.zeros_like(Image_0) + 1
         for idx, image in enumerate([Image_0, Image_1, Image_2, Image_3, Image_4, Image_5]):
-            IMG[idx] = image/np.max(image)
+            IMG[idx] = image
             mask = np.where(image > 0.)
             if len(image[mask]) == 0:
                 Thresh[idx] = 1e-40
