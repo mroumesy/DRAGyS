@@ -596,12 +596,10 @@ def SPF(params):
     Dictionnary
                     Data set of SPF for All the disk, and for each side : Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
                     behind each keys []"All", "East", "West"] : 
-                    {"Scatt"        : Scatt, 
-                     "I"            : SPF, 
-                     "PI"           : SPF, 
-                     "Err_Scatt"    : D_Scatt, 
-                     "Err_I"        : D_SPF, 
-                     "Err_PI"       : D_SPF, 
+                    {"Sca"          : Scatt, 
+                     "SPF"          : SPF, 
+                     "Err_Sca"      : D_Scatt, 
+                     "Err_SPF"      : D_SPF, 
                      "LB"           : LB_effect_tot, 
                      "Err_LB"       : D_LB_tot}
 
@@ -724,9 +722,9 @@ def SPF(params):
     SPF,         D_SPF         = np.array(SPF),         np.abs(np.array(D_SPF))
     SPF_east,    D_SPF_east    = np.array(SPF_east),    np.abs(np.array(D_SPF_east))
     SPF_west,    D_SPF_west    = np.array(SPF_west),    np.abs(np.array(D_SPF_west))
-    All_disk          = {"Scatt" : Scatt,      "I" : SPF,              "PI" : SPF,        "Err_Scatt" : D_Scatt,      "Err_I" : D_SPF,              "Err_PI" : D_SPF,      "LB" : LB_effect_tot,  "Err_LB" : D_LB_tot}
-    East_side         = {"Scatt" : Scatt_east, "I" : SPF_east,         "PI" : SPF_east,   "Err_Scatt" : D_Scatt_east, "Err_I" : D_SPF_east,         "Err_PI" : D_SPF_east, "LB" : LB_effect_east, "Err_LB" : D_LB_east}
-    West_side         = {"Scatt" : Scatt_west, "I" : SPF_west,         "PI" : SPF_west,   "Err_Scatt" : D_Scatt_west, "Err_I" : D_SPF_west,         "Err_PI" : D_SPF_west, "LB" : LB_effect_west, "Err_LB" : D_LB_west}
+    All_disk          = {"Sca" : Scatt,      "SPF" : SPF,        "Err_Sca" : D_Scatt,      "Err_SPF" : D_SPF,      "LB" : LB_effect_tot,  "Err_LB" : D_LB_tot}
+    East_side         = {"Sca" : Scatt_east, "SPF" : SPF_east,   "Err_Sca" : D_Scatt_east, "Err_SPF" : D_SPF_east, "LB" : LB_effect_east, "Err_LB" : D_LB_east}
+    West_side         = {"Sca" : Scatt_west, "SPF" : SPF_west,   "Err_Sca" : D_Scatt_west, "Err_SPF" : D_SPF_west, "LB" : LB_effect_west, "Err_LB" : D_LB_west}
     Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
     return Dataset
 
@@ -958,42 +956,35 @@ def Compute_SPF(params, folderpath, File_name, img_type):
     Dataset = {}
     Types  = ['All', "East", "West"]
     for T in Types:
-        Scatt_tot, I_tot,  Err_I_tot                     = Data_tot[T]["Scatt"],        Data_tot[T]['I'],         Data_tot[T]['Err_I']
-        PI_tot, Err_PI_tot              =                                               Data_tot[T]['PI'],        Data_tot[T]['Err_PI']
+        Scatt_tot          = Data_tot[T]["Sca"]
+        SPF_tot, Err_SPF_tot = Data_tot[T]['SPF'], Data_tot[T]['Err_SPF']
 
-        Scatt_MinPA, I_MinPA,  Err_I_MinPA               = Data_MinPA[T]["Scatt"],      Data_MinPA[T]['I'],       Data_MinPA[T]['Err_I']
-        Scatt_MaxPA, I_MaxPA,  Err_I_MaxPA               = Data_MaxPA[T]["Scatt"],      Data_MaxPA[T]['I'],       Data_MaxPA[T]['Err_I']
-        PI_MinPA, Err_PI_MinPA          =                                               Data_MinPA[T]['PI'],      Data_MinPA[T]['Err_PI']
-        PI_MaxPA, Err_PI_MaxPA          =                                               Data_MaxPA[T]['PI'],      Data_MaxPA[T]['Err_PI']
+        Scatt_MinPA = Data_MinPA[T]["Sca"]
+        Scatt_MaxPA = Data_MaxPA[T]["Sca"]
+        SPF_MinPA    = Data_MinPA[T]['SPF']
+        SPF_MaxPA    = Data_MaxPA[T]['SPF']
 
-        Scatt_MinIncl, I_MinIncl,  Err_I_MinIncl         = Data_MinIncl[T]["Scatt"],    Data_MinIncl[T]['I'],     Data_MinIncl[T]['Err_I']
-        Scatt_MaxIncl, I_MaxIncl,  Err_I_MaxIncl         = Data_MaxIncl[T]["Scatt"],    Data_MaxIncl[T]['I'],     Data_MaxIncl[T]['Err_I']
-        PI_MinIncl, Err_PI_MinIncl      =                                               Data_MinIncl[T]['PI'],    Data_MinIncl[T]['Err_PI']
-        PI_MaxIncl, Err_PI_MaxIncl      =                                               Data_MaxIncl[T]['PI'],    Data_MaxIncl[T]['Err_PI']
+        Scatt_MinIncl = Data_MinIncl[T]["Sca"]
+        Scatt_MaxIncl = Data_MaxIncl[T]["Sca"]
+        SPF_MinIncl    = Data_MinIncl[T]['SPF']
+        SPF_MaxIncl    = Data_MaxIncl[T]['SPF']
 
-        Scatt_MinAspect, I_MinAspect,  Err_I_MinAspect   = Data_MinAspect[T]["Scatt"],  Data_MinAspect[T]['I'],   Data_MinAspect[T]['Err_I']
-        Scatt_MaxAspect, I_MaxAspect,  Err_I_MaxAspect   = Data_MaxAspect[T]["Scatt"],  Data_MaxAspect[T]['I'],   Data_MaxAspect[T]['Err_I']
-        PI_MinAspect, Err_PI_MinAspect  =                                               Data_MinAspect[T]['PI'],  Data_MinAspect[T]['Err_PI']
-        PI_MaxAspect, Err_PI_MaxAspect  =                                               Data_MaxAspect[T]['PI'],  Data_MaxAspect[T]['Err_PI']
+        Scatt_MinAspect = Data_MinAspect[T]["Sca"]
+        Scatt_MaxAspect = Data_MaxAspect[T]["Sca"]
+        SPF_MinAspect    = Data_MinAspect[T]['SPF']
+        SPF_MaxAspect    = Data_MaxAspect[T]['SPF']
 
-        delta_I_MinPA      = np.where((Scatt_tot >= np.min(Scatt_MinPA))     & (Scatt_tot <= np.max(Scatt_MinPA)),      I_tot - np.interp(Scatt_tot,   Scatt_MinPA,      I_MinPA     ), 0)
-        delta_I_MaxPA      = np.where((Scatt_tot >= np.min(Scatt_MaxPA))     & (Scatt_tot <= np.max(Scatt_MaxPA)),      I_tot - np.interp(Scatt_tot,   Scatt_MaxPA,      I_MaxPA     ), 0)
-        delta_I_MinIncl    = np.where((Scatt_tot >= np.min(Scatt_MinIncl))   & (Scatt_tot <= np.max(Scatt_MinIncl)),    I_tot - np.interp(Scatt_tot,   Scatt_MinIncl,    I_MinIncl   ), 0)
-        delta_I_MaxIncl    = np.where((Scatt_tot >= np.min(Scatt_MaxIncl))   & (Scatt_tot <= np.max(Scatt_MaxIncl)),    I_tot - np.interp(Scatt_tot,   Scatt_MaxIncl,    I_MaxIncl   ), 0)
-        delta_I_MinAspect  = np.where((Scatt_tot >= np.min(Scatt_MinAspect)) & (Scatt_tot <= np.max(Scatt_MinAspect)),  I_tot - np.interp(Scatt_tot,   Scatt_MinAspect,  I_MinAspect ), 0)
-        delta_I_MaxAspect  = np.where((Scatt_tot >= np.min(Scatt_MaxAspect)) & (Scatt_tot <= np.max(Scatt_MaxAspect)),  I_tot - np.interp(Scatt_tot,   Scatt_MaxAspect,  I_MaxAspect ), 0)
-        delta_PI_MinPA     = np.where((Scatt_tot >= np.min(Scatt_MinPA))     & (Scatt_tot <= np.max(Scatt_MinPA)),     PI_tot - np.interp(Scatt_tot,   Scatt_MinPA,      PI_MinPA    ), 0)
-        delta_PI_MaxPA     = np.where((Scatt_tot >= np.min(Scatt_MaxPA))     & (Scatt_tot <= np.max(Scatt_MaxPA)),     PI_tot - np.interp(Scatt_tot,   Scatt_MaxPA,      PI_MaxPA    ), 0)
-        delta_PI_MinIncl   = np.where((Scatt_tot >= np.min(Scatt_MinIncl))   & (Scatt_tot <= np.max(Scatt_MinIncl)),   PI_tot - np.interp(Scatt_tot,   Scatt_MinIncl,    PI_MinIncl  ), 0)
-        delta_PI_MaxIncl   = np.where((Scatt_tot >= np.min(Scatt_MaxIncl))   & (Scatt_tot <= np.max(Scatt_MaxIncl)),   PI_tot - np.interp(Scatt_tot,   Scatt_MaxIncl,    PI_MaxIncl  ), 0)
-        delta_PI_MinAspect = np.where((Scatt_tot >= np.min(Scatt_MinAspect)) & (Scatt_tot <= np.max(Scatt_MinAspect)), PI_tot - np.interp(Scatt_tot,   Scatt_MinAspect,  PI_MinAspect), 0)
-        delta_PI_MaxAspect = np.where((Scatt_tot >= np.min(Scatt_MaxAspect)) & (Scatt_tot <= np.max(Scatt_MaxAspect)), PI_tot - np.interp(Scatt_tot,   Scatt_MaxAspect,  PI_MaxAspect), 0)
+        delta_SPF_MinPA     = np.where((Scatt_tot >= np.min(Scatt_MinPA))     & (Scatt_tot <= np.max(Scatt_MinPA)),     SPF_tot - np.interp(Scatt_tot,   Scatt_MinPA,      SPF_MinPA    ), 0)
+        delta_SPF_MaxPA     = np.where((Scatt_tot >= np.min(Scatt_MaxPA))     & (Scatt_tot <= np.max(Scatt_MaxPA)),     SPF_tot - np.interp(Scatt_tot,   Scatt_MaxPA,      SPF_MaxPA    ), 0)
+        delta_SPF_MinIncl   = np.where((Scatt_tot >= np.min(Scatt_MinIncl))   & (Scatt_tot <= np.max(Scatt_MinIncl)),   SPF_tot - np.interp(Scatt_tot,   Scatt_MinIncl,    SPF_MinIncl  ), 0)
+        delta_SPF_MaxIncl   = np.where((Scatt_tot >= np.min(Scatt_MaxIncl))   & (Scatt_tot <= np.max(Scatt_MaxIncl)),   SPF_tot - np.interp(Scatt_tot,   Scatt_MaxIncl,    SPF_MaxIncl  ), 0)
+        delta_SPF_MinAspect = np.where((Scatt_tot >= np.min(Scatt_MinAspect)) & (Scatt_tot <= np.max(Scatt_MinAspect)), SPF_tot - np.interp(Scatt_tot,   Scatt_MinAspect,  SPF_MinAspect), 0)
+        delta_SPF_MaxAspect = np.where((Scatt_tot >= np.min(Scatt_MaxAspect)) & (Scatt_tot <= np.max(Scatt_MaxAspect)), SPF_tot - np.interp(Scatt_tot,   Scatt_MaxAspect,  SPF_MaxAspect), 0)
 
-        Err_I_min  = np.sqrt((Err_I_tot)**2  + np.array(delta_I_MinPA)**2  + np.array(delta_I_MinIncl)**2  + np.array(delta_I_MinAspect)**2)
-        Err_I_max  = np.sqrt((Err_I_tot)**2  + np.array(delta_I_MaxPA)**2  + np.array(delta_I_MaxIncl)**2  + np.array(delta_I_MaxAspect)**2)
-        Err_PI_min = np.sqrt((Err_PI_tot)**2 + np.array(delta_PI_MinPA)**2 + np.array(delta_PI_MinIncl)**2 + np.array(delta_PI_MinAspect)**2)
-        Err_PI_max = np.sqrt((Err_PI_tot)**2 + np.array(delta_PI_MaxPA)**2 + np.array(delta_PI_MaxIncl)**2 + np.array(delta_PI_MaxAspect)**2)
-        Dataset[T] = {'Scatt': Scatt_tot, 'I': I_tot, 'PI': PI_tot, 'Err_Scatt': Data_tot[T]['Err_Scatt'], 'Err_I': [Err_I_min, Err_I_max], 'Err_PI': [Err_PI_min, Err_PI_max], 'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], "Params" : params[0]}
+        Err_PI_min = np.sqrt((Err_SPF_tot)**2 + np.array(delta_SPF_MinPA)**2 + np.array(delta_SPF_MinIncl)**2 + np.array(delta_SPF_MinAspect)**2)
+        Err_PI_max = np.sqrt((Err_SPF_tot)**2 + np.array(delta_SPF_MaxPA)**2 + np.array(delta_SPF_MaxIncl)**2 + np.array(delta_SPF_MaxAspect)**2)
+        # Dataset[T] = {'Scatt': Scatt_tot, 'I': I_tot, 'PI': SPF_tot, 'Err_Scatt': Data_tot[T]['Err_Scatt'], 'Err_I': [Err_I_min, Err_I_max], 'Err_PI': [Err_PI_min, Err_PI_max], 'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], "Params" : params[0]}
+        Dataset[T] = {'Sca': Scatt_tot, 'SPF': SPF_tot, 'Err_Sca': Data_tot[T]['Err_Sca'], 'Err_SPF': [Err_PI_min, Err_PI_max], 'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], "Params" : params[0]}
     
     filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}.{(img_type[0]).lower()}spf"
     with open(filename, 'wb') as Data_PhF:
@@ -1314,9 +1305,9 @@ def Get_PhF(filename, side='All', LBCorrected=False, norm='none'):
 def Get_SPF(filename, side='All', LBCorrected=False, norm='none'):          # Not Used Yet
     with open(filename, 'rb') as fichier:
         Loaded_Data = pkl.load(fichier)
-    Scatt     = np.array(Loaded_Data[side]["Scatt"])
+    Scatt     = np.array(Loaded_Data[side]["Sca"])
     SPF       = np.array(Loaded_Data[side]["SPF"])
-    Err_Scatt = np.array(Loaded_Data[side]["Err_Scatt"])
+    Err_Scatt = np.array(Loaded_Data[side]["Err_Sca"])
     Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
     LB        = np.array(Loaded_Data[side]["LB"])
     Err_LB    = np.array(Loaded_Data[side]["Err_LB"])

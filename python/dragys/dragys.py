@@ -951,14 +951,14 @@ class DRAGyS(QWidget):
             else :
                 ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
-            ax.scatter((Y-center)*PixelScale, (X-center)*PixelScale, marker='.', color='blue') # given points
-            ax.plot((Y_e-center)*PixelScale,  (X_e-center)*PixelScale, label="ellipse fit", color='blue')
+            ax.scatter((Y-center)*PixelScale, (X-center)*PixelScale,   marker='.',          color='blue') # given points
+            ax.plot( (Y_e-center)*PixelScale, (X_e-center)*PixelScale, label="ellipse fit", color='blue')
             ax.set_xlim(x_min, x_max)
             ax.set_ylim(x_min, x_max)
             ax.set_xlabel('X position [pix]')
             ax.set_ylabel('Y position [pix]')
             ax.legend(loc='upper right')
-            ax.text(x_min, x_max, u'i = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(self.incl),3))+' °', str(np.round(np.degrees(self.PA),3))+' °', str(np.round(self.aspect, 3))), color='red', ha='left', va='top')
+            ax.text(0.1, 0.9, u'i = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(self.incl),3))+' °', str(np.round(np.degrees(self.PA),3))+' °', str(np.round(self.aspect, 3))), bbox=dict(boxstyle="round",ec='k',fc='w', alpha=0.5), color='k', ha='left', va='top', transform=ax.transAxes)
             self.Fitting.show()
 
     def Launch_Filtering_Data(self):
@@ -1287,16 +1287,16 @@ class DRAGyS(QWidget):
         total_folder     = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.tspf"
         polarized_folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.pspf"
         try :
-            self.atSca, _, self.atSPF, self.D_atSca, _, self.D_atSPF, self.atLB, self.D_atLB = Tools.Get_PhF(total_folder, side='All',  LBCorrected=self.LBCorrected, norm=self.NormType)
-            self.etSca, _, self.etSPF, self.D_etSca, _, self.D_etSPF, self.etLB, self.D_etLB = Tools.Get_PhF(total_folder, side='East', LBCorrected=self.LBCorrected, norm=self.NormType)
-            self.wtSca, _, self.wtSPF, self.D_wtSca, _, self.D_wtSPF, self.wtLB, self.D_wtLB = Tools.Get_PhF(total_folder, side='West', LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.atSca, self.atSPF, self.atLB, self.D_atSca, self.D_atSPF, self.D_atLB = Tools.Get_SPF(total_folder, side='All',  LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.etSca, self.etSPF, self.etLB, self.D_etSca, self.D_etSPF, self.D_etLB = Tools.Get_SPF(total_folder, side='East', LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.wtSca, self.wtSPF, self.wtLB, self.D_wtSca, self.D_wtSPF, self.D_wtLB = Tools.Get_SPF(total_folder, side='West', LBCorrected=self.LBCorrected, norm=self.NormType)
             self.TSPF = True
         except:
             self.TSPF = False
         try:
-            self.apSca, _, self.apSPF, self.D_apSca, _, self.D_apSPF, self.apLB, self.D_apLB = Tools.Get_PhF(polarized_folder, side='All',  LBCorrected=self.LBCorrected, norm=self.NormType)
-            self.epSca, _, self.epSPF, self.D_epSca, _, self.D_epSPF, self.epLB, self.D_epLB = Tools.Get_PhF(polarized_folder, side='East', LBCorrected=self.LBCorrected, norm=self.NormType)
-            self.wpSca, _, self.wpSPF, self.D_wpSca, _, self.D_wpSPF, self.wpLB, self.D_wpLB = Tools.Get_PhF(polarized_folder, side='West', LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.apSca, self.apSPF, self.apLB, self.D_apSca, self.D_apSPF, self.D_apLB = Tools.Get_SPF(polarized_folder, side='All',  LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.epSca, self.epSPF, self.epLB, self.D_epSca, self.D_epSPF, self.D_epLB = Tools.Get_SPF(polarized_folder, side='East', LBCorrected=self.LBCorrected, norm=self.NormType)
+            self.wpSca, self.wpSPF, self.wpLB, self.D_wpSca, self.D_wpSPF, self.D_wpLB = Tools.Get_SPF(polarized_folder, side='West', LBCorrected=self.LBCorrected, norm=self.NormType)
             self.PSPF = True
         except:
             self.PSPF = False
@@ -1385,10 +1385,9 @@ class DRAGyS(QWidget):
         Toolbar = NavigationToolbar(Canvas_Img_PhF, self)
         layout_Img_PhF = QVBoxLayout()
         folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"
-        Scatt,      _, PI,      Err_Scatt,      _, Err_PI,      LB,      Err_LB      = Tools.Get_PhF(folder, side='All')
-        Scatt_east, _, PI_east, Err_Scatt_east, _, Err_PI_east, LB_east, Err_LB_east = Tools.Get_PhF(folder, side='East')
-        Scatt_west, _, PI_west, Err_Scatt_west, _, Err_PI_west, LB_west, Err_LB_west = Tools.Get_PhF(folder, side='West')
-
+        Scatt,      PI,      LB,      Err_Scatt,      Err_PI,      Err_LB      = Tools.Get_SPF(folder, side='All')
+        Scatt_east, PI_east, LB_east, Err_Scatt_east, Err_PI_east, Err_LB_east = Tools.Get_SPF(folder, side='East')
+        Scatt_west, PI_west, LB_west, Err_Scatt_west, Err_PI_west, Err_LB_west = Tools.Get_SPF(folder, side='West')
         PI_LB        = PI/LB
         Err_PI_LB    = PI_LB  * np.sqrt((Err_PI/PI)**2   + (Err_LB/LB)**2)
         PI_east      = PI_east/LB_east
@@ -1764,7 +1763,7 @@ class FilteringWindow(QDialog):
         super(FilteringWindow, self).__init__(parent)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowMinimizeButtonHint)
         self.resize(1000, 600)
-        self.nb_steps = 1000
+        self.nb_steps = 100
         self.disk_name = disk_name
 
         self.image     = image
@@ -2293,7 +2292,7 @@ class FilteringWindow(QDialog):
             Radius       = np.random.normal(R, np.std(Point_Offset), nb_points)
             Phi          = np.random.uniform(0, 2*np.pi, nb_points)
             # Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, incl, R, H, 1, PA)
-            Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1, R, Phi, x0=x0, y0=y0)
+            Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1, Radius, Phi, x0=x0, y0=y0)
             coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
             Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
             D_inclinations = np.arccos(b/a)
