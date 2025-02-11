@@ -606,8 +606,6 @@ def SPF(params):
     """
     [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Type] = params    
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
-    R_ref = R_ref/pixelscale_au
-    H_ref = H_ref/pixelscale_au
     aspect = H_ref/R_ref
     nb_radius = round((R_out - R_in)/pixelscale_au) + 5
     Phi = np.radians(Phi)
@@ -1510,50 +1508,60 @@ def DiskDistances():
     """
     Stock Distance of targets that I have
     """
-    D = [160.3, 144.0, 145.5, 158.4, 156.3, 184.4, 184.4, 185.2, 129.4, 157.2, 157.2, 180.7, 180.7, 190.2, 142.2, 142.2, 323.82, 401.07]
     Distances = {}
-    Folder = 'C:\\Users\mroum\OneDrive\Bureau\PhD\Data\DESTINYS/'
-    List_File = os.listdir(Folder)
-    List_File.remove('additional_suggestions')
-    for idx, file in enumerate(List_File):
-        hdu = fits.open(Folder + file)
-        header = hdu[0].header
-        name = header['TARGET']
-        Distances[name] = D[idx]
 
-    D = [137.4, 131.9, 158.39, 159.9, 138.16, 151.1, 350.5, 103.8, 159.26, 154.6]
-    Folder = 'C:\\Users\mroum\OneDrive\Bureau\PhD\Data\DESTINYS/additional_suggestions/'
-    List_File = os.listdir(Folder)
-    for idx, file in enumerate(List_File):
-        hdu = fits.open(Folder + file)
-        header = hdu[0].header
-        name = header['TARGET']
-        Distances[name] = D[idx]
-
-    Distances["HD 34282"] = 308.6
-    Distances["LkCa15"]   = 157.2
-    Distances["V 4046"]   = 71.5
-    Distances["PDS 66"]   = 97.9
-    Distances["RX J1852"] = 147.1
-    Distances["RX J1615"] = 155.6
-    Distances["HD163296"] = 101.0
     Distances["MCFOST"]   = 100.0
+
+    Distances["HD34282"]  = 308.6
+    Distances["HD163296"] = 101.0
+    Distances["LkCa15"]   = 157.2
+    Distances["V4046"]   = 71.5
+    Distances["PDS 66"]   = 97.9
+    Distances["RX J1615"] = 155.6
+    Distances["RX J1852"] = 147.1
     Distances["hr4796"]   = 71.9
+
+    Distances["CI_Tau"]    = 160.3
+    Distances["DM_Tau"]    = 144
+    Distances["GG_Tau"]    = 145.5
+    Distances["GM_Aur"]    = 158.4
+    Distances["HD_31648"]  = 156.3
+    Distances["HD_97048"]  = 184.4
+    Distances["Hen_3-545"] = 185.2
+    Distances["IP_Tau"]    = 129.4
+    Distances["LkCa_15"]   = 157.2
+    Distances["SY_Cha"]    = 180.7
+    Distances["SZCha"]     = 190.2
+    Distances["UX_Tau"]    = 142.2
+    Distances["UX_TAU"]    = 142.2
+    Distances["V351_Ori"]  = 323.82
+    Distances["V599_Ori"]  = 401.07
+
+    Distances["J16090075"]  = 137.4
+    Distances["J16120668"]  = 131.97
+    Distances["BD-08_1115"] = 158.39
+    Distances["DL_Tau"]     = 159.9
+    Distances["DoAr_25"]    = 138.16
+    Distances["Haro_1-1"]   = 151.1
+    Distances["HD_34700"]   = 156.29
+    Distances["HD_100453"]  = 350.5
+    Distances["HD_142527"]  = 103.8
+    Distances["TYC_6213"]   = 154.6
+
     return Distances
 
-def Get_Distance(Distances, Path):
-    """
-    Get Distance of target that I have
-    """
-    Folder = '/'.join(Path.split('/')[:-1]) + '/'
-    File   = Path.split('/')[-1]
-    FILE = File.replace(' ', '').replace('_', '').replace('-', '').upper()
-    hdu = fits.open(Folder + File)
-    header = hdu[0].header
-    if 'TARGET' in header: 
-        return Distances[header['TARGET']]
+def Get_Distance(Path):
+    Distances = DiskDistances()
+    for key in Distances.keys():
+        if key in Path:
+            return Distances[key]        
+
+def Get_Band(Path):
+    if "_H." in Path or "_H_" in Path:
+        return 1.65
+    elif "_J." in Path or "_J_" in Path:
+        return 1.25
+    elif "_K." in Path or "_K_" in Path or "_Ks." in Path or "_Ks_" in Path:
+        return 2.18
     else :
-        for keys in Distances.keys():
-            KEYS = keys.replace(' ', '').replace('_', '').replace('-', '').upper()
-            if KEYS in FILE :
-                return Distances[keys]
+        return 1.65

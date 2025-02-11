@@ -135,20 +135,20 @@ class DRAGyS(QWidget):
         self.AspectRatioLine.setDecimals(3)
         self.HeightLine.setDecimals(2)
         self.RadiusLine.setDecimals(2)
-        self.PowerLawAlphaLine.setDecimals(2)
+        self.PowerLawAlphaLine.setDecimals(3)
         self.ErrInclinationLine.setDecimals(2)
         self.ErrPositionAngleLine.setDecimals(2)
         self.ErrAspectRatioLine.setDecimals(3)
         self.ErrHeightLine.setDecimals(2)
         self.ErrRadiusLine.setDecimals(2)
-        self.ErrPowerLawAlphaLine.setDecimals(2)
+        self.ErrPowerLawAlphaLine.setDecimals(3)
         
         self.InclinationLine.setValue(0)
         self.PositionAngleLine.setValue(0)
         self.AspectRatioLine.setValue(0)
         self.HeightLine.setValue(10)
         self.RadiusLine.setValue(100)
-        self.PowerLawAlphaLine.setValue(1)
+        self.PowerLawAlphaLine.setValue(1.219)      # Based on Avenhaus+2018         and         Kenyon & Hartmann 1987
         self.ErrInclinationLine.setValue(0)
         self.ErrPositionAngleLine.setValue(0)
         self.ErrAspectRatioLine.setValue(0)
@@ -180,11 +180,11 @@ class DRAGyS(QWidget):
         self.PowerLawAlphaLine.editingFinished.connect(self.UpdateParams)
         self.ErrPowerLawAlphaLine.editingFinished.connect(self.UpdateParams)
 
-        self.InclinationLine.valueChanged.connect(self.Extraction_Zone)
-        self.PositionAngleLine.valueChanged.connect(self.Extraction_Zone)
-        self.HeightLine.valueChanged.connect(self.Extraction_Zone)
-        self.RadiusLine.valueChanged.connect(self.Extraction_Zone)
-        self.PowerLawAlphaLine.valueChanged.connect(self.Extraction_Zone)
+        self.InclinationLine.editingFinished.connect(self.Extraction_Zone)
+        self.PositionAngleLine.editingFinished.connect(self.Extraction_Zone)
+        self.HeightLine.editingFinished.connect(self.Extraction_Zone)
+        self.RadiusLine.editingFinished.connect(self.Extraction_Zone)
+        self.PowerLawAlphaLine.editingFinished.connect(self.Extraction_Zone)
         
         # Star position buttons
         self.CheckStar = QCheckBox('Non Centered Star', self)
@@ -272,7 +272,7 @@ class DRAGyS(QWidget):
         self.R_out_entry.setMaximum(1000)
         self.R_in_entry.setFixedWidth(100)
         self.R_out_entry.setFixedWidth(100)
-        self.R_adjustement = QCheckBox('See Adjustment', self)
+        self.R_adjustement = QCheckBox('Display Extraction Zone', self)
         self.R_adjustement.setEnabled(False)
         self.R_in_entry.valueChanged.connect(self.Extraction_Zone)
         self.R_out_entry.valueChanged.connect(self.Extraction_Zone)
@@ -634,10 +634,13 @@ class DRAGyS(QWidget):
         self.nb_bin_entry.setValue(37)  # To have 5° width bin size
         self.pixelscale_entry.setValue(0.01225)
         try :
-            Distances = Tools.DiskDistances()
-            self.distance_entry.setValue(str(Tools.Get_Distance(Distances, self.file_path)))
+            distance = Tools.Get_Distance(self.file_path)
+            self.distance_entry.setValue(distance)
         except:
             self.distance_entry.setValue(100) 
+        band = Tools.Get_Band(self.file_path)
+        self.wavelength_entry.setValue(band)
+
         if "SPHERE" in self.file_name.upper():
             self.pixelscale_entry.setValue(0.01225)
 
@@ -739,6 +742,10 @@ class DRAGyS(QWidget):
             self.Init_image(self.file_path)
             self.SavedParams()
             self.Clickable_Buttons()
+        if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
+            self.Display_Fit_button.setEnabled(True)
+        else:
+            self.Display_Fit_button.setEnabled(False)
         if self.Fitting and self.Fitting.isVisible():
             self.Fitting.close()
 
@@ -847,6 +854,10 @@ class DRAGyS(QWidget):
         elif self.fit_type == 'Polarized':
             self.fit_type  =  'Total'
             self.UseFittingButton.setText("Total Fitting")
+        if os.path.exists(f'{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit'):
+            self.Display_Fit_button.setEnabled(True)
+        else:
+            self.Display_Fit_button.setEnabled(False)
         self.update_label_fitting()
         self.SavedParams()
 
@@ -880,8 +891,9 @@ class DRAGyS(QWidget):
         if self.r_ref == 0 or self.h_ref == 0:
             self.h_ref = 1e-20
             self.r_ref = 1e-20
-        self.aspect   = self.h_ref/self.r_ref**self.alpha
-        self.D_aspect = (self.h_ref/self.r_ref**self.alpha) * np.sqrt((self.D_r_ref/self.r_ref)**2 + (self.D_h_ref/self.h_ref)**2)
+        self.aspect   = self.h_ref/self.r_ref
+        # self.aspect   = self.h_ref/self.r_ref**self.alpha
+        self.D_aspect = self.aspect * np.sqrt((self.D_r_ref/self.r_ref)**2 + (self.D_h_ref/self.h_ref)**2)
         self.UpdateFitting()
 
     def UpdateFitting(self):
@@ -1047,8 +1059,8 @@ class DRAGyS(QWidget):
         d = float(self.distance_entry.value())
         FoV_au = d * (648000/np.pi) * np.tan(pixelscale*len(self.img_0)/3600 * np.pi/180)
         pixelscale_au = FoV_au/len(self.img_0)
-        R_ref = self.r_ref/pixelscale_au
-        H_ref = self.h_ref/pixelscale_au
+        R_ref = self.r_ref
+        H_ref = self.h_ref
         R = R / pixelscale_au
         x     = R * np.sin(Phi)
         y     = H_ref * (R/R_ref)**self.alpha * np.sin(self.incl) - R * np.cos(Phi) * np.cos(self.incl)
@@ -2310,7 +2322,7 @@ class FilteringWindow(QDialog):
         D_Chi    = 0
         D_Aspect = Aspect * np.sqrt((D_R/R)**2 + (D_H/H)**2)
 
-        Data_to_Save    = { "params"        : [incl, R, H, Aspect, 1, PA], 
+        Data_to_Save    = { "params"        : [incl, R, H, Aspect, 1.219, PA],      # Based on Avenhaus et al. 2018         and         Kenyon & Hartmann 1987 
                             "first_estim"   : First_Estimation,
                             "Err"           : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
                             'Points'        : [X, Y, All_X, All_Y], 
