@@ -934,7 +934,7 @@ class DRAGyS(QWidget):
             else :
                 ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
-            ax.scatter((Points[:,1]-center)*PixelScale, (Points[:,0]-center)*PixelScale,   marker='.',          color='blue') # given points
+            ax.scatter((Points[:,0]-center)*PixelScale, (Points[:,1]-center)*PixelScale,   marker='.',          color='blue') # given points
             # ax.plot( (f_Y_e-center)*PixelScale, (f_X_e-center)*PixelScale, label="first ellipse fit", color='red')
             ax.plot((Ye-center)*PixelScale, (Xe-center)*PixelScale, label="ellipse fit", color='blue')
             ax.set_xlim(x_min, x_max)

@@ -1517,7 +1517,7 @@ def Get_PhF(filename, side='All', LBCorrected=False, norm='none'):
 
     return Scatt, I/normI, PI/normPI, Err_Scatt, Err_I/normI, Err_PI/normPI, LB, Err_LB
 
-def Get_SPF(filename, side='All', LBCorrected=False, norm='none'):          # Not Used Yet
+def Get_SPF(filename, side='All', LBCorrected=False, norm='none', coronagraph_transmission=False):          # Not Used Yet
     with open(filename, 'rb') as fichier:
         Loaded_Data = pkl.load(fichier)
     Scatt     = np.array(Loaded_Data[side]["Sca"])
@@ -1526,6 +1526,9 @@ def Get_SPF(filename, side='All', LBCorrected=False, norm='none'):          # No
     Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
     LB        = np.array(Loaded_Data[side]["LB"])
     Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
+    if coronagraph_transmission == True:
+        SPF       = np.array(Loaded_Data[side]["SPF_coro"])
+        Err_SPF   = np.array(Loaded_Data[side]["Err_SPF_coro"])
     if LBCorrected:
         SPF  = SPF/LB
         Err_SPF = SPF * np.sqrt((Err_SPF/SPF)**2 + (Err_LB/LB)**2)
