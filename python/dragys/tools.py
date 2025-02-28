@@ -601,6 +601,12 @@ def Std_Ellipse(points, Xe, Ye, Xc, Yc):
         Point_Offset.append(dist)
     return np.std(Point_Offset)
 
+def orthogonal_projection(xs, ys, xc, yc, angle):
+    PA = angle
+    ys_p = (yc*np.tan(PA)*np.sin(PA) - (xc - xs)*np.sin(PA) + ys*np.cos(PA)) / (np.tan(PA)*np.sin(PA) + np.cos(PA))
+    xs_p = xc + (ys_p - yc)*np.tan(PA)
+    dist = np.sqrt((xs - xs_p)**2 + (ys - ys_p)**2)
+    return xs_p, ys_p
 # =======================================================================================
 # ============================ Scattering Phase Functions ===============================
 # =======================================================================================
@@ -650,6 +656,8 @@ def SPF_V2(params):
     """
     [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Corono_mask, Type] = params    
     
+    print(xs, ys)
+    print(Xc, Yc)
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
     nb_radius = round((R_out - R_in)/pixelscale_au) + 5
     Phi = np.radians(Phi)
@@ -738,181 +746,6 @@ def SPF_V2(params):
         LB_effect_tot, D_LB_tot   = np.array(LB_effect_tot), np.abs(np.array(D_LB_tot)) 
 
         Dataset[Side_type] = {"Sca" : Sca, "SPF" : SPF, "Err_Sca" : D_Sca, "Err_SPF" : D_SPF, "LB" : LB_effect_tot, "Err_LB" : D_LB_tot, "SPF_coro" : SPF_coro, "Err_SPF_coro" : D_SPF_coro}
-    return Dataset
-
-def SPF(params):
-    """
-    Compute raw SPF using geometrical parameters, extraction zone and limb brightening effet
-
-    Parameters
-    ----------
-
-    params      :   list
-                    list of parameters used for SPF extraction
-                    img (ndarray)       -   fits image
-                    distance (float)    -   target distance in parsec
-                    pixelscale (float)  -   pixelscale in arcsec/pixel
-                    (xs, ys) (float)    -   star position in pixel
-                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
-                    incl (float)        -   inclination in radian
-                    PA (float)          -   Position Angle in radian
-                    R_ref (float)       -   Reference Radius of fitted disk geometry
-                    H_ref (float)       -   Reference Height of fitted disk geometry
-                    aspect (float)      -   H_ref/R_ref
-                    alpha (float)       -   power law index for local scattering height computation
-                    D_incl (float)      -   Error on inclination in radian
-                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
-                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
-                    D_aspect (float)    -   Error on H_ref/R_ref
-                    R_in, R_out (float) -   Limits of extraction zone
-                    n_bin (int)         -   number of bins for scattering angles
-                    Phi (ndarray)       -   azimuth for scanning the disk image
-                    Type (str)          -   SPF type, if its for values or for error estimations
-    
-    Returns
-    -------
-
-    Dictionnary
-                    Data set of SPF for All the disk, and for each side : Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
-                    behind each keys []"All", "East", "West"] : 
-                    {"Sca"          : Scatt, 
-                     "SPF"          : SPF, 
-                     "Err_Sca"      : D_Scatt, 
-                     "Err_SPF"      : D_SPF, 
-                     "LB"           : LB_effect_tot, 
-                     "Err_LB"       : D_LB_tot}
-
-    """
-    [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Corono_mask, Type] = params    
-    pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
-    aspect = H_ref/R_ref
-    nb_radius = round((R_out - R_in)/pixelscale_au) + 5
-    Phi = np.radians(Phi)
-    Angle,      Flux              = [], []
-    # Flux_Corono                       = []
-    Angle_east, Flux_east         = [], []
-    Angle_west, Flux_west         = [], []
-    already_used_pixels           = []
-
-    # R2    = R2_scaled(img, incl, PA)
-    # R2img = R2 * img
-
-    size = len(img)/2
-    Side = np.zeros_like(img)
-    x0 = y0 = len(img)/2
-    slope = np.tan(PA)
-    intercept = y0 - x0*slope
-    mask_idx = np.indices((len(img), len(img)))
-    mask = mask_idx[0] > slope * mask_idx[1] + intercept
-    Side[mask] = 1
-
-    for R in np.linspace(R_in/pixelscale_au, R_out/pixelscale_au, nb_radius):
-        if Xc == None:
-            xc_p, yc_p = size, size
-        else:
-            Phi, yc_p, xc_p = Non_Centered_Star_AzimithalAngle(R, (xs, ys), (Yc, Xc), np.pi/2 -PA, Phi)
-        for phi in Phi :
-            x     = R * np.sin(phi)
-            y     = H_ref * (R/R_ref)**alpha * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
-            x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
-            y_rot = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
-            if (round(x_rot), round(y_rot)) not in already_used_pixels:
-                sca = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
-                if Side[round(x_rot), round(y_rot)] == 1:
-                    Angle_east.append(np.degrees(sca))
-                    Flux_east.append(img[round(x_rot), round(y_rot)])
-                else :
-                    Angle_west.append(np.degrees(sca))
-                    Flux_west.append(img[round(x_rot), round(y_rot)])
-                Flux.append(img[round(x_rot), round(y_rot)])
-                # Flux_R2.append(R2img[round(x_rot), round(y_rot)])
-                Angle.append(np.degrees(sca))
-                already_used_pixels.append((round(x_rot), round(y_rot)))
-                
-    Angle,      Flux      = np.array(Angle),      np.array(Flux)
-    # Flux_R2 = np.array(Flux_R2)
-    Angle_east, Flux_east = np.array(Angle_east), np.array(Flux_east)
-    Angle_west, Flux_west = np.array(Angle_west), np.array(Flux_west)
-
-    Scatt, D_Scatt   = [], []
-    SPF, D_SPF       = [], []
-    # SPF_R2, D_SPF_R2 = [], []
-    Scatt_east, D_Scatt_east   = [], []
-    SPF_east, D_SPF_east       = [], []
-
-    Scatt_west, D_Scatt_west   = [], []
-    SPF_west, D_SPF_west       = [], []
-
-    bin_Scatt = np.linspace(0, 180, n_bin+1)
-
-    for idx in range(n_bin):
-        mask      = np.where(np.logical_and(Angle      >= bin_Scatt[idx], Angle      < bin_Scatt[idx+1]))
-        mask_east = np.where(np.logical_and(Angle_east >= bin_Scatt[idx], Angle_east < bin_Scatt[idx+1]))
-        mask_west = np.where(np.logical_and(Angle_west >= bin_Scatt[idx], Angle_west < bin_Scatt[idx+1]))
-        if len(mask[0])!=0:
-            Scatt.append(np.nanmean(Angle[mask]))
-            D_Scatt.append(np.nanstd(Angle[mask])/len(Angle[mask]))
-            SPF.append(np.nanmean(Flux[mask]))
-            D_SPF.append(np.nanstd(Flux[mask])/len(Flux[mask]))
-            # SPF_R2.append(np.nanmean(Flux_R2[mask]))
-            # D_SPF_R2.append(np.nanstd(Flux_R2[mask])/len(Flux_R2[mask]))
-        if len(mask_east[0]) != 0:
-            Scatt_east.append(np.nanmean(Angle_east[mask_east]))
-            D_Scatt_east.append(np.nanstd(Angle_east[mask_east])/len(Angle_east[mask_east]))
-            SPF_east.append(np.nanmean(Flux_east[mask_east]))
-            D_SPF_east.append(np.nanstd(Flux_east[mask_east])/len(Flux_east[mask_east]))
-        if len(mask_west[0]) != 0:
-            Scatt_west.append(np.nanmean(Angle_west[mask_west]))
-            D_Scatt_west.append(np.nanstd(Angle_west[mask_west])/len(Angle_west[mask_west]))
-            SPF_west.append(np.nanmean(Flux_west[mask_west]))
-            D_SPF_west.append(np.nanstd(Flux_west[mask_west])/len(Flux_west[mask_west]))
-
-    if alpha == 1:
-        chi = 1.00001
-    else :
-        chi = alpha
-    N = np.cos(aspect) * np.sin(chi*aspect - aspect)
-    D = np.cos(aspect) * np.sin(chi*aspect - aspect) + np.cos(incl) * np.cos(chi*aspect - aspect) - np.sin(chi*aspect) * np.cos(np.radians(Scatt))
-    dN_g  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1))
-    dD_g  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1)) + np.cos(incl) * (-np.sin(chi*aspect - aspect) * (chi-1)) - np.cos(chi*aspect) * chi * np.cos(np.radians(Scatt))
-    dLB_g = (D * dN_g * N * dD_g)/D**2
-    dLB_i = (-N*np.sin(incl)*np.cos(chi*aspect-aspect))/D**2
-    dLB_s = (-N*np.sin(chi*aspect)*np.sin(np.radians(Scatt)))/D**2
-
-    N_east = np.cos(aspect) * np.sin(chi*aspect - aspect)
-    D_east = np.cos(aspect) * np.sin(chi*aspect - aspect) + np.cos(incl) * np.cos(chi*aspect - aspect) - np.sin(chi*aspect) * np.cos(np.radians(Scatt_east))
-    dN_g_east  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1))
-    dD_g_east  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1)) + np.cos(incl) * (-np.sin(chi*aspect - aspect) * (chi-1)) - np.cos(chi*aspect) * chi * np.cos(np.radians(Scatt_east))
-    dLB_g_east = (D_east * dN_g_east * N_east * dD_g_east)/D_east**2
-    dLB_i_east = (-N_east*np.sin(incl)*np.cos(chi*aspect-aspect))/D_east**2
-    dLB_s_east = (-N_east*np.sin(chi*aspect)*np.sin(np.radians(Scatt_east)))/D_east**2
-
-    N_west = np.cos(aspect) * np.sin(chi*aspect - aspect)
-    D_west = np.cos(aspect) * np.sin(chi*aspect - aspect) + np.cos(incl) * np.cos(chi*aspect - aspect) - np.sin(chi*aspect) * np.cos(np.radians(Scatt_west))
-    dN_g_west  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1))
-    dD_g_west  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1)) + np.cos(incl) * (-np.sin(chi*aspect - aspect) * (chi-1)) - np.cos(chi*aspect) * chi * np.cos(np.radians(Scatt_west))
-    dLB_g_west = (D_west * dN_g_west * N_west * dD_g_west)/D_west**2
-    dLB_i_west = (-N_west*np.sin(incl)*np.cos(chi*aspect-aspect))/D_west**2
-    dLB_s_west = (-N_west*np.sin(chi*aspect)*np.sin(np.radians(Scatt_west)))/D_west**2
-
-    LB_effect_tot = N/D
-    D_LB_tot = np.sqrt((dLB_g * D_aspect)**2 + (dLB_i * D_incl)**2 + (dLB_s * D_Scatt)**2)
-
-    LB_effect_east = N_east/D_east
-    D_LB_east = np.sqrt((dLB_g_east * D_aspect)**2 + (dLB_i_east * D_incl)**2 + (dLB_s_east * D_Scatt_east)**2)
-
-    LB_effect_west = N_west/D_west
-    D_LB_west = np.sqrt((dLB_g_west * D_aspect)**2 + (dLB_i_west * D_incl)**2 + (dLB_s_west * D_Scatt_west)**2)
-
-    Scatt, Scatt_east, Scatt_west = np.array(Scatt),  np.array(Scatt_east), np.array(Scatt_west)
-    SPF,         D_SPF         = np.array(SPF),         np.abs(np.array(D_SPF))
-    # SPF_R2,      D_SPF_R2      = np.array(SPF_R2),      np.abs(np.array(D_SPF_R2))
-    SPF_east,    D_SPF_east    = np.array(SPF_east),    np.abs(np.array(D_SPF_east))
-    SPF_west,    D_SPF_west    = np.array(SPF_west),    np.abs(np.array(D_SPF_west))
-    All_disk          = {"Sca" : Scatt,      "SPF" : SPF,        "Err_Sca" : D_Scatt,      "Err_SPF" : D_SPF,      "LB" : LB_effect_tot,  "Err_LB" : D_LB_tot} #, "SPF_R2" : SPF_R2, "Err_SPF_R2" : D_SPF_R2}
-    East_side         = {"Sca" : Scatt_east, "SPF" : SPF_east,   "Err_Sca" : D_Scatt_east, "Err_SPF" : D_SPF_east, "LB" : LB_effect_east, "Err_LB" : D_LB_east}
-    West_side         = {"Sca" : Scatt_west, "SPF" : SPF_west,   "Err_Sca" : D_Scatt_west, "Err_SPF" : D_SPF_west, "LB" : LB_effect_west, "Err_LB" : D_LB_west}
-    Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
     return Dataset
 
 def New_Beam_pSPF(params):
@@ -1396,39 +1229,6 @@ def angle_oriente_2d(v1, v2):
         oriented = no_oriented
     return oriented
 
-def Orthogonal_Prejection(star_position, ellipse_center, PA):
-    """
-    Compute orthogonal projection between star position and semi-major axis of the fitted ellipse
-
-    Parameters
-    ----------
-
-    star_position       :   tuple
-                            (xs, ys) star position
-    
-    ellipse_center      :   tuple
-                            (xc, yc) ellipse position
-    
-    PA                  :   float
-                            Position Angle in radian
-    
-    Returns
-    -------
-
-    xc_prime            :   float
-                            x-coordinate of orthogonal projection
-    yc_prime            :   float
-                            y-coordinate of orthogonal projection
-    """
-    (xs, ys) = star_position
-    (xc, yc) = ellipse_center
-    a = np.cos(-PA)
-    b = np.sin(-PA)
-    t = ((xc - xs) * a + (yc - ys) * b) / (a * a + b * b)
-    xc_prime = xs + t * a
-    yc_prime = ys + t * b
-    return xc_prime, yc_prime
-
 def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     """
     Compute new scattering angle and orthogonal projection of non centered star system
@@ -1467,7 +1267,7 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
     b = np.sin(-PA)
-    xc_prime, yc_prime = Orthogonal_Prejection(star_position, ellipse_center, PA)
+    xc_prime, yc_prime = orthogonal_projection(xs, ys, xc, yc, PA)
     X_PA = a + xs
     Y_PA = b + ys
 
@@ -1640,6 +1440,7 @@ def LimbBrightening(Scatt, incl, aspect, chi):
     return (np.cos(aspect) * np.sin(aspect*chi-aspect)) / (np.cos(aspect)*np.sin(aspect*chi-aspect) + np.cos(incl)*np.cos(aspect*chi-aspect) - np.sin(aspect*chi)*np.cos(np.radians(Scatt)))
 
 # =======================================================================================
+
 # ==================================     Images      ====================================
 # =======================================================================================
 

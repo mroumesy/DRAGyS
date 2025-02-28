@@ -910,6 +910,7 @@ class DRAGyS(QWidget):
             canvas_fit          = FigureCanvas(self.Fitting_figure)
             self.Fitting.setWindowTitle("Fitting Figure")
             (x_min, x_max) = self.ax.get_xlim()
+            print(x_min, x_max)
             PixelScale     = float(self.pixelscale_entry.value())
             size           = len(self.img_0)/2 * PixelScale
             center         = len(self.img_0)/2
@@ -923,27 +924,30 @@ class DRAGyS(QWidget):
             [  incl,   R,   H,   Aspect,   chi,   PA,   Xe,   Ye,   Xc,   Yc] = Loaded_Data["params"]
             [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA, D_Xe, D_Ye, D_Xc, D_Yc] = Loaded_Data['Err']
             [f_incl, f_R, f_H, f_Aspect, f_chi, f_PA, f_Xe, f_Ye, f_Xc, f_Yc] = Loaded_Data["first_estim"]
-            [Points, All_Points]                      = Loaded_Data["Points"]  
+            [Points, All_Points]                      = Loaded_Data["Points"]
 
-            # X_e, Y_e = Tools.ellipse(incl, PA, H, R, 1.219, R, np.linspace(0, 2*np.pi, 361), x0=center, y0=center)
+            xs_p, ys_p = Tools.orthogonal_projection(center, center, Xc, Yc, PA)
+            X_e,   Y_e   = Tools.ellipse(  incl,   PA,   H,   R,   chi,   R, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+            f_X_e, f_Y_e = Tools.ellipse(f_incl, f_PA, f_H, f_R, f_chi, f_R, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
             
             ax.set_facecolor('black')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
             if self.Data_Type == "MCFOST_Data":
-                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+                ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
             else :
-                ax.imshow(self.img_chose, origin='lower', extent=[-size, size, -size, size], cmap="inferno", norm=colors.LogNorm())
+                ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
-            ax.scatter((Points[:,0]-center)*PixelScale, (Points[:,1]-center)*PixelScale,   marker='.',          color='blue') # given points
+            ax.scatter(-(Points[:, 0]*PixelScale - size), Points[:, 1]*PixelScale - size, marker='.', color='blue') # given points
             # ax.plot( (f_Y_e-center)*PixelScale, (f_X_e-center)*PixelScale, label="first ellipse fit", color='red')
-            ax.plot((Ye-center)*PixelScale, (Xe-center)*PixelScale, label="ellipse fit", color='blue')
-            ax.set_xlim(x_min, x_max)
+            # ax.plot((Ye - center + Yc)*PixelScale, (Xe - center + Xc)*PixelScale, label="ellipse fit", color='blue')
+            ax.plot(-(  X_e*PixelScale - size),   Y_e*PixelScale - size, color='darkgreen')
+            ax.plot(-(f_X_e*PixelScale - size), f_Y_e*PixelScale - size, color='darkred')
+            ax.set_xlim(-x_min, -x_max)
             ax.set_ylim(x_min, x_max)
-            ax.set_xlabel('X position [pix]')
-            ax.set_ylabel('Y position [pix]')
-            ax.legend(loc='upper right')
-            ax.text(0.01, 0.99, u'i = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(  incl),3))+' °', str(np.round(np.degrees(  PA),3))+' °', str(np.round(  Aspect, 3))), bbox=dict(boxstyle="round",ec='k',fc='w', alpha=1), color='darkblue', ha='left', va='top',    transform=ax.transAxes)
-            ax.text(0.01, 0.01, u'i = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(f_incl),3))+' °', str(np.round(np.degrees(f_PA),3))+' °', str(np.round(f_Aspect, 3))), bbox=dict(boxstyle="round",ec='k',fc='w', alpha=1), color='darkred',  ha='left', va='bottom', transform=ax.transAxes)
+            ax.set_xlabel('X position [arcsec]')
+            ax.set_ylabel('Y position [arcsec]')
+            ax.text(0.01, 0.99, u'Parameter Estimation \ni = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(  incl),3))+' °', str(np.round(np.degrees(  PA),3))+' °', str(np.round(  Aspect, 3))), bbox=dict(boxstyle="round",ec='k',fc='w', alpha=1), color='darkgreen', ha='left', va='top',    transform=ax.transAxes)
+            ax.text(0.01, 0.01, u'Raw Estimation \ni = {:<15} \n PA = {:<15} \n h/r = {:<15}'.format(str(np.round(np.degrees(f_incl),3))+' °', str(np.round(np.degrees(f_PA),3))+' °', str(np.round(f_Aspect, 3))), bbox=dict(boxstyle="round",ec='k',fc='w', alpha=1), color='darkred',   ha='left', va='bottom', transform=ax.transAxes)
             self.Fitting.show()
 
     def Launch_Filtering_Data(self):
@@ -1004,8 +1008,24 @@ class DRAGyS(QWidget):
             R_in          = float(self.R_in_entry.value())
             R_out         = float(self.R_out_entry.value())
             pixelscale    = float(self.pixelscale_entry.value())
-            X_in, Y_in    = self.Ellipse(R_in, pixelscale) #*1.996007984)
-            X_out, Y_out  = self.Ellipse(R_out, pixelscale) #*1.996007984)
+            size = len(self.img_0)
+            d = float(self.distance_entry.value())
+            FoV_au = d * (648000/np.pi) * np.tan(pixelscale*size/3600 * np.pi/180)
+            pixelscale_au = FoV_au/size
+
+            with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
+                Loaded_Data = pkl.load(fichier)
+            [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+
+            xs_p, ys_p = Tools.orthogonal_projection(size/2, size/2, Xc, Yc, self.PA)
+
+            X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+            X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+            X_in  = (X_in  - size/2)*pixelscale
+            X_out = (X_out - size/2)*pixelscale
+            Y_in  = (Y_in  - size/2)*pixelscale
+            Y_out = (Y_out - size/2)*pixelscale
+
             self.ellipse_zone = self.ax.fill(np.append(X_in, X_out[::-1]), 
                                              np.append(Y_in, Y_out[::-1]), 
                                              color='gold', alpha=0.4, linestyle='')
@@ -1013,33 +1033,6 @@ class DRAGyS(QWidget):
             self.ellipse_out  = self.ax.scatter(X_out, Y_out, c='orange', s=1)
             self.canvas.draw()
             self.Display_EZ = True
-
-    def Ellipse(self, R, pixelscale):
-        """
-        Compute ellipses at a given radius using geometric parameters and taking into account the pixelscale
-
-        Parameters
-        ----------
-        R           :   float
-                        Radius in au
-        pixelscale  :   float
-                        pixelscale in arcsec/pixel
-        """
-        with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
-            Loaded_Data = pkl.load(fichier)
-        [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        xs = ys = len(self.img_0)/2
-        yc_p, xc_p = Tools.Orthogonal_Prejection((xs, ys), (Yc, Xc), np.pi/2 - self.PA)
-        Phi = np.radians(np.linspace(0, 359, 360))
-        d = float(self.distance_entry.value())
-        FoV_au = d * (648000/np.pi) * np.tan(pixelscale*len(self.img_0)/3600 * np.pi/180)
-        pixelscale_au = FoV_au/len(self.img_0)
-        R = R / pixelscale_au
-        x     = R * np.sin(Phi)
-        y     = self.h_ref * (R/self.r_ref)**self.alpha * np.sin(self.incl) - R * np.cos(Phi) * np.cos(self.incl)
-        x_rot = (x * np.cos(np.pi - self.PA) - y * np.sin(np.pi - self.PA) + (xc_p-xs)) *pixelscale
-        y_rot = (x * np.sin(np.pi - self.PA) + y * np.cos(np.pi - self.PA) + (yc_p-ys)) *pixelscale
-        return y_rot, x_rot    
     
     def Compute_Side(self):
         """
@@ -1090,12 +1083,19 @@ class DRAGyS(QWidget):
         self.UpdateParams()
         xs = float(self.X_StarPosition.value())
         ys = float(self.Y_StarPosition.value())
-        if self.InputStar:
-            with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
+
+        # If an offset is founded between star and ellipse center, i.e, if disk is not centered with the central star, it is automatically considered
+        with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
-            [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        else:
-            Xc, Yc = None, None
+        [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+        
+        # if self.InputStar:
+        #     with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
+        #         Loaded_Data = pkl.load(fichier)
+        #     [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+        # else:
+        #     Xc, Yc = None, None
+
         start = time.time()
         self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 7
         self.computation_step = 0
@@ -1406,9 +1406,21 @@ class DRAGyS(QWidget):
             ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
         else :
             ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+        d = float(self.distance_entry.value())
+        FoV_au = d * (648000/np.pi) * np.tan(pixelscale*size/3600 * np.pi/180)
+        pixelscale_au = FoV_au/size
 
-        X_in, Y_in = self.Ellipse(R_in, pixelscale)
-        X_out, Y_out = self.Ellipse(R_out, pixelscale)
+        with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
+            Loaded_Data = pkl.load(fichier)
+        [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+        xs_p, ys_p = Tools.orthogonal_projection(size/2, size/2, Xc, Yc, self.PA)
+
+        X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+        X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+        X_in  = (X_in  - size/2)*pixelscale
+        X_out = (X_out - size/2)*pixelscale
+        Y_in  = (Y_in  - size/2)*pixelscale
+        Y_out = (Y_out - size/2)*pixelscale
         ax_img_Extraction.set_facecolor('black')
         ax_img_Extraction.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), color='gold', alpha=0.4, linestyle='')
         ax_img_Extraction.scatter(X_in,  Y_in,  s=1, c='orange')
@@ -2240,7 +2252,9 @@ class FilteringWindow(QDialog):
         X_ellipse = []
         Y_ellipse = []
 
-        f_incl, f_PA, f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(self.point_cloud, x0, y0)
+        f_incl, f_PA, f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(np.column_stack((self.point_cloud[:, 1], self.point_cloud[:, 0])), x0, y0)
+
+        xs_p, ys_p = Tools.orthogonal_projection(x0, y0, f_Xc, f_Yc, f_PA)
 
         for dec in peaks_range:   # Offset starting point from 4 index position, to remove too close points 
             filtered_Points = Tools.filtrer_nuage_points(self.point_cloud, self.r_beam, dec=dec)
@@ -2249,7 +2263,7 @@ class FilteringWindow(QDialog):
             for n in range(nb_rand):
                 Random_Radius       = np.random.normal(R, std_ellipse, nb_points)
                 Random_Phi          = np.random.uniform(0, 2*np.pi, nb_points)
-                Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1.219, Random_Radius, Random_Phi, x0=x0, y0=y0)
+                Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1.219, Random_Radius, Random_Phi, x0=ys_p, y0=xs_p)
                 inclination, positionangle, radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
                 Inclination.append(inclination)
                 PositionAngle.append(positionangle)
@@ -2277,12 +2291,16 @@ class FilteringWindow(QDialog):
 
         Xc = np.mean(X_center)
         Yc = np.mean(Y_center)
+        # Xc = f_Xc
+        # Yc = f_Yc
 
         D_Xc = np.std(X_center)
         D_Yc = np.std(Y_center)
 
         Xe = np.mean(np.array(X_ellipse), axis=0)
         Ye = np.mean(np.array(Y_ellipse), axis=0)
+        # Xe = f_Xe
+        # Ye = f_Ye
 
         D_Xe = np.std(np.array(X_ellipse), axis=0)
         D_Ye = np.std(np.array(Y_ellipse), axis=0)
