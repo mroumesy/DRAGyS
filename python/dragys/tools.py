@@ -466,6 +466,8 @@ def My_PositionAngle(xcenter, ycenter, x0, y0, a, b, e, PA_LSFE):
     else:
         X_PA = Xa[0] - Xa[1]
         Y_PA = Ya[0] - Ya[1]
+    # PA = np.arctan2(X_PA, Y_PA)
+    # print(PA)
     PA = ((-np.arctan2(X_PA, Y_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
     return PA
 
@@ -578,16 +580,29 @@ def filtrer_nuage_points(points, seuil, dec=0):
 def Ellipse_Estimation(points, x0, y0):
     X = points[:, 0]
     Y = points[:, 1]
-    coeffs         = fit_ellipse(np.array(X), np.array(Y))
+    coeffs = fit_ellipse(np.array(X), np.array(Y))
     Xc, Yc, a, b, e, PA_LSQE = cart_to_pol(coeffs)
-    incl           = np.arccos(b/a)
-    PA             = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
+
+    t = np.array([0, np.pi]) + np.pi/2
+    X_edge = Xc + a*np.cos(t)*np.cos(PA_LSQE) - b*np.sin(t)*np.sin(PA_LSQE)
+    Y_edge = Yc + a*np.cos(t)*np.sin(PA_LSQE) + b*np.sin(t)*np.cos(PA_LSQE)
+
+    dist = np.sqrt((X_edge - x0)**2 + (Y_edge - y0)**2)
+    idx  = np.argmax(dist)
+
+    PA   = (-np.arctan2(Y_edge[idx] - Yc, X_edge[idx] - Xc) +np.pi/2) % (2*np.pi)
+    incl = np.arccos(b/a)
+
+    # PA             = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
     Xe, Ye         = get_ellipse_pts((Xc, Yc, a, b, e, PA))
-    D              = Height_Compute(Xe, Ye, x0, y0)
+    # D              = Height_Compute(Xe, Ye, x0, y0)
+    _, _, D        = orthogonal_projection((x0, y0), (Xc, Yc), PA)
     H              = D / np.sin(incl)
     R              = a
     Aspect         = H/R
-    return incl, PA, R, H, Aspect, Xe, Ye, Xc, Yc
+    x_coords_PA = np.cos(PA)
+    y_coords_PA = np.sin(PA)
+    return incl, (x_coords_PA, y_coords_PA), R, H, Aspect, Xe, Ye, Xc, Yc
 
 def Std_Ellipse(points, Xe, Ye, Xc, Yc):
     X = points[:, 0]
@@ -601,12 +616,31 @@ def Std_Ellipse(points, Xe, Ye, Xc, Yc):
         Point_Offset.append(dist)
     return np.std(Point_Offset)
 
-def orthogonal_projection(xs, ys, xc, yc, angle):
-    PA = angle
-    ys_p = (yc*np.tan(PA)*np.sin(PA) - (xc - xs)*np.sin(PA) + ys*np.cos(PA)) / (np.tan(PA)*np.sin(PA) + np.cos(PA))
-    xs_p = xc + (ys_p - yc)*np.tan(PA)
-    dist = np.sqrt((xs - xs_p)**2 + (ys - ys_p)**2)
-    return xs_p, ys_p
+def orthogonal_projection(A, B, theta):
+    x_A, y_A = A
+    x_B, y_B = B
+
+    # Calcul des cosinus et sinus de l'angle
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+
+    # Calcul du paramètre t
+    t = (x_A - x_B) * cos_theta + (y_A - y_B) * sin_theta
+
+    # Coordonnées du projeté orthogonal P
+    x_P = x_B + t * cos_theta
+    y_P = y_B + t * sin_theta
+
+    dist = np.sqrt((x_B - x_P)**2 + (y_B - y_P)**2)
+
+    return x_P, y_P, dist
+
+# def orthogonal_projection(xs, ys, xc, yc, angle):
+#     PA = angle
+#     ys_p = (yc*np.tan(PA)*np.sin(PA) - (xc - xs)*np.sin(PA) + ys*np.cos(PA)) / (np.tan(PA)*np.sin(PA) + np.cos(PA))
+#     xs_p = xc + (ys_p - yc)*np.tan(PA)
+#     dist = np.sqrt((xs - xs_p)**2 + (ys - ys_p)**2)
+#     return xs_p, ys_p
 # =======================================================================================
 # ============================ Scattering Phase Functions ===============================
 # =======================================================================================
@@ -656,11 +690,10 @@ def SPF_V2(params):
     """
     [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Corono_mask, Type] = params    
     
-    print(xs, ys)
-    print(Xc, Yc)
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
     nb_radius = round((R_out - R_in)/pixelscale_au) + 5
     Phi = np.radians(Phi)
+    Phi0 = Phi.copy()
     if alpha == 1:
         chi = 1.00001
     else :
@@ -682,12 +715,19 @@ def SPF_V2(params):
     y_rot = np.zeros(nb_radius * len(Phi))
     sca   = np.zeros(nb_radius * len(Phi))
 
+    xc_p, yc_p, _ = orthogonal_projection((xs, ys), (Xc, Yc), PA)    
+    # xc_p, yc_p = xs, ys
+
     idx = 0
     for R in np.linspace(R_in/pixelscale_au, R_out/pixelscale_au, nb_radius):
-        if Xc == None:
-            xc_p, yc_p = size, size
-        else:
-            Phi, yc_p, xc_p = Non_Centered_Star_AzimithalAngle(R, (xs, ys), (Yc, Xc), np.pi/2 -PA, Phi)
+        # Phi, yc_p, xc_p = Non_Centered_Star_AzimithalAngle(R, (xs, ys), (Yc, Xc), np.pi/2 -PA, Phi)
+
+        x_circle = xc_p + R * np.cos(PA - Phi)
+        y_circle = yc_p + R * np.sin(PA - Phi)
+
+        Phi = (PA - np.arctan2(y_circle - xs, x_circle - ys)) % (2*np.pi)
+
+        # print(np.degrees(np.mean(Phi - Phi0)))
         for phi in Phi :
             x     = R * np.sin(phi)
             y     = H_ref * (R/R_ref)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
@@ -704,6 +744,7 @@ def SPF_V2(params):
     for idx, Side_type in enumerate(['All', 'East', 'West']):
         image = Imgs[idx]
         image_coro = image.copy() / Corono_mask
+        image_EZ = image.copy()
         Angle, Flux, Flux_Coro = [], [], []
         already_used_pixels = []
         for jdx in range(len(x_rot)):
@@ -712,6 +753,7 @@ def SPF_V2(params):
                 Flux_Coro.append(image_coro[round(x_rot[jdx]), round(y_rot[jdx])])
                 Angle.append(np.degrees(sca[jdx]))
                 already_used_pixels.append((round(x_rot[jdx]), round(y_rot[jdx])))
+                image_EZ[round(x_rot[jdx]), round(y_rot[jdx])] = 0
                 
         Angle, Flux, Flux_Coro = np.array(Angle), np.array(Flux), np.array(Flux_Coro)
 
@@ -745,7 +787,7 @@ def SPF_V2(params):
         SPF_coro,      D_SPF_coro = np.array(SPF_coro),      np.abs(np.array(D_SPF_coro))
         LB_effect_tot, D_LB_tot   = np.array(LB_effect_tot), np.abs(np.array(D_LB_tot)) 
 
-        Dataset[Side_type] = {"Sca" : Sca, "SPF" : SPF, "Err_Sca" : D_Sca, "Err_SPF" : D_SPF, "LB" : LB_effect_tot, "Err_LB" : D_LB_tot, "SPF_coro" : SPF_coro, "Err_SPF_coro" : D_SPF_coro}
+        Dataset[Side_type] = {"Sca" : Sca, "SPF" : SPF, "Err_Sca" : D_Sca, "Err_SPF" : D_SPF, "LB" : LB_effect_tot, "Err_LB" : D_LB_tot, "SPF_coro" : SPF_coro, "Err_SPF_coro" : D_SPF_coro, "EZ" : image_EZ}
     return Dataset
 
 def New_Beam_pSPF(params):
@@ -1023,7 +1065,10 @@ def Compute_SPF(params, folderpath, File_name, img_type):
         Dataset[T] = {'Sca': Scatt_tot, 
                       'SPF'      : SPF_tot, 'Err_Sca' : Data_tot[T]['Err_Sca'], 'Err_SPF'      : [Err_PI_min,      Err_PI_max     ], 
                       'SPF_coro' : SPF_coro                                   , 'Err_SPF_coro' : [Err_PI_min_coro, Err_PI_max_coro], 
-                      'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], "Params" : params[0]}
+                      'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], 
+                      "Params" : params[0],
+                      "EZ" : Data_tot[T]["EZ"],
+                      }
     filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}.{(img_type[0]).lower()}spf"
     with open(filename, 'wb') as Data_PhF:
         pkl.dump(Dataset, Data_PhF)
@@ -1267,7 +1312,7 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
     b = np.sin(-PA)
-    xc_prime, yc_prime = orthogonal_projection(xs, ys, xc, yc, PA)
+    xc_prime, yc_prime, dist = orthogonal_projection((xs, ys), (xc, yc), PA)
     X_PA = a + xs
     Y_PA = b + ys
 
@@ -1284,6 +1329,7 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
         D = - np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
     elif -np.pi/2 > angle:
         D =   np.sqrt((xs - xc_prime)**2 + (ys - yc_prime)**2)
+
     New_Phi = NewScatt(R, (xs + D, ys), Phi, star=(xs, ys))
     return New_Phi, xc_prime, yc_prime
 

@@ -1,5 +1,6 @@
-from PyQt6.QtWidgets import QMessageBox, QTextEdit, QApplication, QScrollArea, QDialog, QSpacerItem, QSizePolicy, QWidget, QSlider, QCheckBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox, QFrame, QProgressBar
+from PyQt6.QtWidgets import QStyleFactory, QMessageBox, QTextEdit, QApplication, QScrollArea, QDialog, QSpacerItem, QSizePolicy, QWidget, QSlider, QCheckBox, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox, QFrame, QProgressBar
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -330,6 +331,8 @@ class DRAGyS(QWidget):
                 Button.setFixedHeight(90)
             else :
                 Button.setFixedHeight(40)
+            Button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)  # Largeur flexible, hauteur fixe
+
 
         # Display Figure
         self.fig = Figure(facecolor="k")
@@ -748,9 +751,9 @@ class DRAGyS(QWidget):
         except:
             SERGE = "Scattering Extraction from Ring Geometry Estimation"
         if self.Data_Type == "MCFOST_Data":
-            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
         else :
-            self.displayed_img = self.ax.imshow(self.img_chose, extent=[-self.Size, self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.LogNorm())
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.LogNorm())
         self.Zoom_Slider_Update(self.ZoomSlider.value())
 
     def Init_image(self, file_path):
@@ -799,7 +802,7 @@ class DRAGyS(QWidget):
             size  = len(self.img_0) * 100/value
             x_min = len(self.img_0)/2 - size/2
             x_max = len(self.img_0)/2 + size/2
-            self.ax.set_xlim((x_min - len(self.img_0)/2)* PixelScale, (x_max - len(self.img_0)/2)* PixelScale)
+            self.ax.set_xlim(-(x_min - len(self.img_0)/2)* PixelScale, -(x_max - len(self.img_0)/2)* PixelScale)
             self.ax.set_ylim((x_min - len(self.img_0)/2)* PixelScale, (x_max - len(self.img_0)/2)* PixelScale)
             self.canvas.draw()
     
@@ -909,8 +912,7 @@ class DRAGyS(QWidget):
 
             canvas_fit          = FigureCanvas(self.Fitting_figure)
             self.Fitting.setWindowTitle("Fitting Figure")
-            (x_min, x_max) = self.ax.get_xlim()
-            print(x_min, x_max)
+            (x_min, x_max) = self.ax.get_ylim()
             PixelScale     = float(self.pixelscale_entry.value())
             size           = len(self.img_0)/2 * PixelScale
             center         = len(self.img_0)/2
@@ -926,9 +928,11 @@ class DRAGyS(QWidget):
             [f_incl, f_R, f_H, f_Aspect, f_chi, f_PA, f_Xe, f_Ye, f_Xc, f_Yc] = Loaded_Data["first_estim"]
             [Points, All_Points]                      = Loaded_Data["Points"]
 
-            xs_p, ys_p = Tools.orthogonal_projection(center, center, Xc, Yc, PA)
-            X_e,   Y_e   = Tools.ellipse(  incl,   PA,   H,   R,   chi,   R, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
-            f_X_e, f_Y_e = Tools.ellipse(f_incl, f_PA, f_H, f_R, f_chi, f_R, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+            xc_p,   yc_p,   dist = Tools.orthogonal_projection((center, center), (Xc, Yc), PA)
+            f_xc_p, f_yc_p, dist = Tools.orthogonal_projection((center, center), (f_Xc, f_Yc), PA)
+
+            X_e,   Y_e   = Tools.ellipse(  incl,   PA,   H,   R,   chi,   R, np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
+            f_X_e, f_Y_e = Tools.ellipse(f_incl, f_PA, f_H, f_R, f_chi, f_R, np.linspace(0, 2*np.pi, 361), x0=f_xc_p, y0=f_yc_p)
             
             ax.set_facecolor('black')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
@@ -938,6 +942,8 @@ class DRAGyS(QWidget):
                 ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
             ax.scatter(-(Points[:, 0]*PixelScale - size), Points[:, 1]*PixelScale - size, marker='.', color='blue') # given points
+            ax.scatter(-(f_Xc*PixelScale - size), f_Yc*PixelScale - size, marker='.', color='darkred') # given points
+            ax.scatter(-(  Xc*PixelScale - size),   Yc*PixelScale - size, marker='.', color='darkgreen') # given points
             # ax.plot( (f_Y_e-center)*PixelScale, (f_X_e-center)*PixelScale, label="first ellipse fit", color='red')
             # ax.plot((Ye - center + Yc)*PixelScale, (Xe - center + Xc)*PixelScale, label="ellipse fit", color='blue')
             ax.plot(-(  X_e*PixelScale - size),   Y_e*PixelScale - size, color='darkgreen')
@@ -954,7 +960,7 @@ class DRAGyS(QWidget):
         """
         Setup and launch the brightness maxima detection on a second PyQt window
         """
-        (x_min, x_max) = self.ax.get_xlim() 
+        (x_min, x_max) = self.ax.get_ylim() 
         PixelScale = float(self.pixelscale_entry.value())
         x_min, x_max = x_min/PixelScale + len(self.img_0)/2, x_max/PixelScale + len(self.img_0)/2
         D = float(self.diameter_entry.value())
@@ -1017,20 +1023,20 @@ class DRAGyS(QWidget):
                 Loaded_Data = pkl.load(fichier)
             [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
 
-            xs_p, ys_p = Tools.orthogonal_projection(size/2, size/2, Xc, Yc, self.PA)
+            xc_p, yc_p, dist = Tools.orthogonal_projection((size/2, size/2), (Xc, Yc), self.PA)
 
-            X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
-            X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+            X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
+            X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
             X_in  = (X_in  - size/2)*pixelscale
             X_out = (X_out - size/2)*pixelscale
             Y_in  = (Y_in  - size/2)*pixelscale
             Y_out = (Y_out - size/2)*pixelscale
 
-            self.ellipse_zone = self.ax.fill(np.append(X_in, X_out[::-1]), 
+            self.ellipse_zone = self.ax.fill(np.append(-X_in, -X_out[::-1]), 
                                              np.append(Y_in, Y_out[::-1]), 
                                              color='gold', alpha=0.4, linestyle='')
-            self.ellipse_in   = self.ax.scatter(X_in, Y_in, c='orange', s=1)
-            self.ellipse_out  = self.ax.scatter(X_out, Y_out, c='orange', s=1)
+            self.ellipse_in   = self.ax.scatter(-X_in, Y_in, c='orange', s=1)
+            self.ellipse_out  = self.ax.scatter(-X_out, Y_out, c='orange', s=1)
             self.canvas.draw()
             self.Display_EZ = True
     
@@ -1088,7 +1094,7 @@ class DRAGyS(QWidget):
         with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
         [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        
+
         # if self.InputStar:
         #     with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
         #         Loaded_Data = pkl.load(fichier)
@@ -1096,19 +1102,21 @@ class DRAGyS(QWidget):
         # else:
         #     Xc, Yc = None, None
 
+        xc_P, yc_P, _ = Tools.orthogonal_projection((xs, ys), (Xc, Yc), self.PA)
+
         start = time.time()
         self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 7
         self.computation_step = 0
 
         Corono_mask = Tools.Correct_Corono_Transmission(self.img_chose, W, pixelscale, output="R2_mask")
 
-        list_params_SPF = [ [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Total"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl - self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl + self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA - self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA + self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect - self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect + self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"]]
+        list_params_SPF = [ [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Total"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl - self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl + self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA - self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA + self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect - self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"],
+                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect + self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"]]
         Tools.Compute_SPF(list_params_SPF, self.folderpath, self.file_name, self.img_type)
         end = time.time()
         self.Is_computed.setText(" SPF computed - time = " +str(np.round(end-start, 2)) + ' seconds')
@@ -1413,10 +1421,10 @@ class DRAGyS(QWidget):
         with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
             Loaded_Data = pkl.load(fichier)
         [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        xs_p, ys_p = Tools.orthogonal_projection(size/2, size/2, Xc, Yc, self.PA)
+        xc_p, yc_p, dist = Tools.orthogonal_projection((size/2, size/2), (Xc, Yc), self.PA)
 
-        X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
-        X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=ys_p, y0=xs_p)
+        X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=yc_p, y0=xc_p)
+        X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=yc_p, y0=xc_p)
         X_in  = (X_in  - size/2)*pixelscale
         X_out = (X_out - size/2)*pixelscale
         Y_in  = (Y_in  - size/2)*pixelscale
@@ -1910,8 +1918,8 @@ class FilteringWindow(QDialog):
         self.NbAzimuth_slider = QSlider(Qt.Orientation.Horizontal)
         self.NbAzimuth_slider.setMinimum(10)
         self.NbAzimuth_slider.setMaximum(360)
-        self.NbAzimuth_slider.setValue(90)
-        self.NbAzimuth_value = 90
+        self.NbAzimuth_slider.setValue(360)
+        self.NbAzimuth_value = 360
         self.NbAzimuth_value_Label = QLabel(str(self.NbAzimuth_value))
         self.NbAzimuth_slider.setSingleStep(10)
         self.NbAzimuth_slider.setTickPosition(QSlider.TickPosition.NoTicks)
@@ -2242,7 +2250,8 @@ class FilteringWindow(QDialog):
         step = 0
 
         Inclination   = []
-        PositionAngle = []
+        X_coords_PositionAngle = []
+        Y_coords_PositionAngle = []
         Radius        = []
         Height        = []
         Aspect        = []
@@ -2251,22 +2260,24 @@ class FilteringWindow(QDialog):
         Y_center  = []
         X_ellipse = []
         Y_ellipse = []
-
-        f_incl, f_PA, f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(np.column_stack((self.point_cloud[:, 1], self.point_cloud[:, 0])), x0, y0)
-
-        xs_p, ys_p = Tools.orthogonal_projection(x0, y0, f_Xc, f_Yc, f_PA)
-
+        f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(self.point_cloud, x0, y0)
+        # f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(np.column_stack((self.point_cloud[:, 0], self.point_cloud[:, 1])), x0, y0)
+        f_PA = ((-np.arctan2(f_y_coords_PA, f_x_coords_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
+        print(np.degrees(f_PA))
         for dec in peaks_range:   # Offset starting point from 4 index position, to remove too close points 
             filtered_Points = Tools.filtrer_nuage_points(self.point_cloud, self.r_beam, dec=dec)
-            incl, PA, R, H, aspect, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(filtered_Points, x0, y0)
+            incl, (x_coords_PA, y_coords_PA), R, H, aspect, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(filtered_Points, x0, y0)
+            PA = ((-np.arctan2(y_coords_PA, x_coords_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
             std_ellipse = Tools.Std_Ellipse(filtered_Points, Xe, Ye, Xc, Yc)
+            xc_p, yc_p, _ = Tools.orthogonal_projection((x0, y0), (Xc, Yc), PA)
             for n in range(nb_rand):
                 Random_Radius       = np.random.normal(R, std_ellipse, nb_points)
                 Random_Phi          = np.random.uniform(0, 2*np.pi, nb_points)
-                Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1.219, Random_Radius, Random_Phi, x0=ys_p, y0=xs_p)
-                inclination, positionangle, radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
+                Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1.219, Random_Radius, Random_Phi, x0=xc_p, y0=yc_p)
+                inclination, (x_coords_pa, y_coords_pa), radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
                 Inclination.append(inclination)
-                PositionAngle.append(positionangle)
+                X_coords_PositionAngle.append(x_coords_pa)
+                Y_coords_PositionAngle.append(y_coords_pa)
                 Radius.append(radius)
                 Height.append(height)
                 Aspect.append(h_r)
@@ -2278,13 +2289,16 @@ class FilteringWindow(QDialog):
                 self.progress.setValue(int(100*step/(nb_rand*nb_peaks_range)))
 
         incl = np.mean(Inclination)
-        PA   = np.mean(PositionAngle)
+        X_coords = np.mean(X_coords_PositionAngle)
+        Y_coords = np.mean(Y_coords_PositionAngle)
+        PA_Radius   = np.sqrt(X_coords**2 + Y_coords**2)
+        PA   = ((-np.arctan2(     Y_coords,      X_coords)) % (2*np.pi) - np.pi/2) % (2*np.pi)
         R    = np.mean(Radius)
         H    = np.mean(Height)
         H_R  = np.mean(Aspect)
 
         D_incl = np.std(Inclination)
-        D_PA   = np.std(PositionAngle)
+        D_PA   = np.sqrt(-2*np.log(PA_Radius))
         D_R    = np.std(Radius)
         D_H    = np.std(Height)
         D_H_R  = np.std(Aspect)
@@ -2431,6 +2445,10 @@ class Launcher:
     """
     def Run():
         app = QApplication(sys.argv)
+        # app.setStyle(QStyleFactory.create("Fusion"))  # Applique un style stable
+        # app.setStyle(QStyleFactory.create("Windows"))  # Applique un style stable
+
         ex = DRAGyS()  # Instancie la fenêtre principale
+        app.setWindowIcon(QIcon("DRAGYS.ico"))
         ex.show()
         app.exec()  # Démarre la boucle événementielle
