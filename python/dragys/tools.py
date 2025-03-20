@@ -328,7 +328,7 @@ def Max_pixel(image, R_max=None, gaussian_filter=3, smooth_filter=10, prominence
                 Y.append(len(image)/2 + (Mincut_Radius + peak)*np.cos(phi))
     return X, Y
 
-def ellipse(incl, PA, h, r, chi, R, phi, x0=0, y0=0):
+def Ellipse(incl, R, R_ref, H, PA, chi, xc, yc, Phi=np.radians(np.linspace(0, 359, 360))):
     """
     Compute ellipse using protoplanetary disk geometric parameters
 
@@ -337,37 +337,37 @@ def ellipse(incl, PA, h, r, chi, R, phi, x0=0, y0=0):
 
     incl        :   float
                     ellipse incl in radians
+    
+    R           :   float
+                    Position of ellipse radius
+    
+    R_ref       :   float
+                    Fitted Reference Radius
+
+    h           :   float
+                    Fitted reference Disk Scattering Surface Height in pixels
 
     PA          :   float
                     ellipse Position Angle in radians
 
-    h           :   float
-                    Disk Scattering Surface Height in pixels
-
-    r           :   float
-                    Disk Scattering Surface Midplane Radius in pixels
-
     chi         :   float
                     Disk Scattering Surface flaring Exponent
 
-    R           :   float
-                    Radius where we begin the extraction in pixels
-
-    phi         :   ndarray
-                    array of parametric variable (typically np.array(0, 2*np.pi, 361))
-
-    x0, y0      :   float (optional)
-                    ellipse center position in pixels
+    xc, yc      :   float 
+                    ellipse center position in pixels <=> star position if ring and star are centered
+    
+    phi         :   ndarray (optional)
+                    array of parametric variable (typically np.radians(np.linspace(0, 359, 360)))
 
     Returns
     -------
-    (x, y) coordinates of ellipse points
+    (Xe, Ye) coordinates of ellipse points
     """
-    x     = R * np.sin(phi)
-    y     = h * (R/r)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
-    x_rot = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA)
-    y_rot = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA)
-    return y_rot + y0, x_rot + x0
+    x     = R * np.sin(Phi)
+    y     = H * (R/R_ref)**chi * np.sin(incl) - R * np.cos(Phi) * np.cos(incl)
+    Xe = - x * np.sin(PA) - y * np.cos(PA) + xc
+    Ye =   x * np.cos(PA) - y * np.sin(PA) + yc
+    return Xe, Ye
 
 def uniform_ellipse(incl, PA, Height, Radius, chi, R, space, x0=0, y0=0, init=0):
     """
@@ -408,7 +408,7 @@ def uniform_ellipse(incl, PA, Height, Radius, chi, R, space, x0=0, y0=0, init=0)
     """
     # Étape 1 : Discrétiser l'ellipse avec une haute résolution
     t = np.linspace(0, 2 * np.pi, 10000)  # Résolution élevée pour une approximation précise
-    x, y = ellipse(incl, PA, Height, Radius, chi, R, t, x0, y0)
+    x, y = Ellipse(incl, R, Radius, Height, PA, chi, x0, y0)
     # Étape 2 : Calculer les longueurs des segments entre les points
     distances = np.sqrt(np.diff(x)**2 + np.diff(y)**2)  # Distance entre chaque point
     cumulative_distances = np.cumsum(distances)         # Longueurs cumulées
@@ -466,8 +466,6 @@ def My_PositionAngle(xcenter, ycenter, x0, y0, a, b, e, PA_LSFE):
     else:
         X_PA = Xa[0] - Xa[1]
         Y_PA = Ya[0] - Ya[1]
-    # PA = np.arctan2(X_PA, Y_PA)
-    # print(PA)
     PA = ((-np.arctan2(X_PA, Y_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
     return PA
 
@@ -590,19 +588,20 @@ def Ellipse_Estimation(points, x0, y0):
     dist = np.sqrt((X_edge - x0)**2 + (Y_edge - y0)**2)
     idx  = np.argmax(dist)
 
-    PA   = (-np.arctan2(Y_edge[idx] - Yc, X_edge[idx] - Xc) +np.pi/2) % (2*np.pi)
+    PA = (np.arctan2(X_edge[idx] - Xc, Y_edge[idx] - Yc) - np.pi) % (2*np.pi)
+
     incl = np.arccos(b/a)
 
-    # PA             = My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
     Xe, Ye         = get_ellipse_pts((Xc, Yc, a, b, e, PA))
-    # D              = Height_Compute(Xe, Ye, x0, y0)
-    _, _, D        = orthogonal_projection((x0, y0), (Xc, Yc), PA)
+
+    xc_p, yc_p  = orthogonal_projection((x0, y0), (Xc, Yc), PA + np.pi/2)
+
+    D = np.sqrt((Xc - xc_p)**2 + (Yc - yc_p)**2)
+
     H              = D / np.sin(incl)
     R              = a
     Aspect         = H/R
-    x_coords_PA = np.cos(PA)
-    y_coords_PA = np.sin(PA)
-    return incl, (x_coords_PA, y_coords_PA), R, H, Aspect, Xe, Ye, Xc, Yc
+    return incl, (X_edge[idx], Y_edge[idx]), R, H, Aspect, Xe, Ye, Xc, Yc
 
 def Std_Ellipse(points, Xe, Ye, Xc, Yc):
     X = points[:, 0]
@@ -631,16 +630,7 @@ def orthogonal_projection(A, B, theta):
     x_P = x_B + t * cos_theta
     y_P = y_B + t * sin_theta
 
-    dist = np.sqrt((x_B - x_P)**2 + (y_B - y_P)**2)
-
-    return x_P, y_P, dist
-
-# def orthogonal_projection(xs, ys, xc, yc, angle):
-#     PA = angle
-#     ys_p = (yc*np.tan(PA)*np.sin(PA) - (xc - xs)*np.sin(PA) + ys*np.cos(PA)) / (np.tan(PA)*np.sin(PA) + np.cos(PA))
-#     xs_p = xc + (ys_p - yc)*np.tan(PA)
-#     dist = np.sqrt((xs - xs_p)**2 + (ys - ys_p)**2)
-#     return xs_p, ys_p
+    return x_P, y_P
 # =======================================================================================
 # ============================ Scattering Phase Functions ===============================
 # =======================================================================================
@@ -715,7 +705,7 @@ def SPF_V2(params):
     y_rot = np.zeros(nb_radius * len(Phi))
     sca   = np.zeros(nb_radius * len(Phi))
 
-    xc_p, yc_p, _ = orthogonal_projection((xs, ys), (Xc, Yc), PA)    
+    xc_p, yc_p = orthogonal_projection((xs, ys), (Xc, Yc), PA)    
     # xc_p, yc_p = xs, ys
 
     idx = 0
@@ -726,13 +716,11 @@ def SPF_V2(params):
         y_circle = yc_p + R * np.sin(PA - Phi)
 
         Phi = (PA - np.arctan2(y_circle - xs, x_circle - ys)) % (2*np.pi)
-
-        # print(np.degrees(np.mean(Phi - Phi0)))
         for phi in Phi :
             x     = R * np.sin(phi)
             y     = H_ref * (R/R_ref)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
-            x_rot[idx] = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
-            y_rot[idx] = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
+            x_rot[idx] = - x * np.sin(PA) - y * np.cos(PA) + xc_p
+            y_rot[idx] =   x * np.cos(PA) - y * np.sin(PA) + yc_p
             sca[idx] = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
             idx += 1
 
@@ -1069,7 +1057,7 @@ def Compute_SPF(params, folderpath, File_name, img_type):
                       "Params" : params[0],
                       "EZ" : Data_tot[T]["EZ"],
                       }
-    filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}.{(img_type[0]).lower()}spf"
+    filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}_DMparams.{(img_type[0]).lower()}spf"
     with open(filename, 'wb') as Data_PhF:
         pkl.dump(Dataset, Data_PhF)
 
@@ -1312,7 +1300,7 @@ def Non_Centered_Star_AzimithalAngle(R, star_position, ellipse_center, PA, Phi):
     (xc, yc) = ellipse_center
     a = np.cos(-PA)
     b = np.sin(-PA)
-    xc_prime, yc_prime, dist = orthogonal_projection((xs, ys), (xc, yc), PA)
+    xc_prime, yc_prime = orthogonal_projection((xs, ys), (xc, yc), PA)
     X_PA = a + xs
     Y_PA = b + ys
 

@@ -923,16 +923,13 @@ class DRAGyS(QWidget):
 
             with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
-            [  incl,   R,   H,   Aspect,   chi,   PA,   Xe,   Ye,   Xc,   Yc] = Loaded_Data["params"]
-            [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA, D_Xe, D_Ye, D_Xc, D_Yc] = Loaded_Data['Err']
-            [f_incl, f_R, f_H, f_Aspect, f_chi, f_PA, f_Xe, f_Ye, f_Xc, f_Yc] = Loaded_Data["first_estim"]
+            [  incl,   R,   H,   Aspect,   chi,   PA, Xc,     Yc,   xc_p,   yc_p] = Loaded_Data["params"]
+            # [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA, D_Xc, D_Yc, D_xc_p, D_yc_p] = Loaded_Data['Err']
+            [f_incl, f_R, f_H, f_Aspect, f_chi, f_PA, f_Xc, f_Yc, f_xc_p, f_yc_p] = Loaded_Data["first_estim"]
             [Points, All_Points]                      = Loaded_Data["Points"]
-
-            xc_p,   yc_p,   dist = Tools.orthogonal_projection((center, center), (Xc, Yc), PA)
-            f_xc_p, f_yc_p, dist = Tools.orthogonal_projection((center, center), (f_Xc, f_Yc), PA)
-
-            X_e,   Y_e   = Tools.ellipse(  incl,   PA,   H,   R,   chi,   R, np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
-            f_X_e, f_Y_e = Tools.ellipse(f_incl, f_PA, f_H, f_R, f_chi, f_R, np.linspace(0, 2*np.pi, 361), x0=f_xc_p, y0=f_yc_p)
+        
+            X_e,   Y_e   = Tools.Ellipse(  incl,   R,   R,   H,   PA,   chi,   xc_p,   yc_p)
+            f_X_e, f_Y_e = Tools.Ellipse(f_incl, f_R, f_R, f_H, f_PA, f_chi, f_xc_p, f_yc_p)
             
             ax.set_facecolor('black')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
@@ -943,6 +940,7 @@ class DRAGyS(QWidget):
 
             ax.scatter(-(Points[:, 0]*PixelScale - size), Points[:, 1]*PixelScale - size, marker='.', color='blue') # given points
             ax.scatter(-(f_Xc*PixelScale - size), f_Yc*PixelScale - size, marker='.', color='darkred') # given points
+            ax.scatter(-(f_xc_p*PixelScale - size), f_xc_p*PixelScale - size, marker='.', color='darkblue') # given points
             ax.scatter(-(  Xc*PixelScale - size),   Yc*PixelScale - size, marker='.', color='darkgreen') # given points
             # ax.plot( (f_Y_e-center)*PixelScale, (f_X_e-center)*PixelScale, label="first ellipse fit", color='red')
             # ax.plot((Ye - center + Yc)*PixelScale, (Xe - center + Xc)*PixelScale, label="ellipse fit", color='blue')
@@ -1021,12 +1019,10 @@ class DRAGyS(QWidget):
 
             with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
-            [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+            [_, _, _, _, _, _, Xc, Yc, xc_p, yc_p] = Loaded_Data["params"]
 
-            xc_p, yc_p, dist = Tools.orthogonal_projection((size/2, size/2), (Xc, Yc), self.PA)
-
-            X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
-            X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=xc_p, y0=yc_p)
+            X_in,  Y_in  = Tools.Ellipse(self.incl,  R_in/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
+            X_out, Y_out = Tools.Ellipse(self.incl, R_out/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
             X_in  = (X_in  - size/2)*pixelscale
             X_out = (X_out - size/2)*pixelscale
             Y_in  = (Y_in  - size/2)*pixelscale
@@ -1102,8 +1098,8 @@ class DRAGyS(QWidget):
         # else:
         #     Xc, Yc = None, None
 
-        xc_P, yc_P, _ = Tools.orthogonal_projection((xs, ys), (Xc, Yc), self.PA)
-
+        xc_P, yc_P = Tools.orthogonal_projection((xs, ys), (Xc, Yc), self.PA)
+        xc_P, yc_P = xs, ys
         start = time.time()
         self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 7
         self.computation_step = 0
@@ -1420,11 +1416,11 @@ class DRAGyS(QWidget):
 
         with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
             Loaded_Data = pkl.load(fichier)
-        [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        xc_p, yc_p, dist = Tools.orthogonal_projection((size/2, size/2), (Xc, Yc), self.PA)
+        [_, _, _, _, _, _, Xc, Yc, xc_p, yc_p] = Loaded_Data["params"]
 
-        X_in,  Y_in  = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_in/pixelscale_au,  np.linspace(0, 2*np.pi, 361), x0=yc_p, y0=xc_p)
-        X_out, Y_out = Tools.ellipse(self.incl, self.PA, self.h_ref, self.r_ref, self.alpha, R_out/pixelscale_au, np.linspace(0, 2*np.pi, 361), x0=yc_p, y0=xc_p)
+        X_in,  Y_in  = Tools.Ellipse(self.incl,  R_in/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
+        X_out, Y_out = Tools.Ellipse(self.incl, R_out/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
+
         X_in  = (X_in  - size/2)*pixelscale
         X_out = (X_out - size/2)*pixelscale
         Y_in  = (Y_in  - size/2)*pixelscale
@@ -2238,90 +2234,175 @@ class FilteringWindow(QDialog):
         """
         Finish the peak fitting by estimating the geometric parameters. All points, selected points, ellipse estimates, estimated geometric parameters, their errors, the image, and filter parameters are saved in a “{TargetName}.{Type}fit” file.
         """
+        chi = 1.219
+
+        def Parameters_Estimation(Points, xs, ys):
+            X = Points[:, 0]
+            Y = Points[:, 1]
+            coeffs = Tools.fit_ellipse(np.array(X), np.array(Y))
+            Xc, Yc, a, b, e, angle = Tools.cart_to_pol(coeffs)
+            Xe, Ye = Tools.get_ellipse_pts((Xc, Yc, a, b, e, -angle))
+            Xedge, Yedge = Tools.get_ellipse_pts((Xc, Yc, a, b, e, -angle), liste=[-np.pi/2, np.pi/2])
+            idx_max = np.argmax(np.sqrt((Xedge-xs)**2 + (Yedge-ys)**2))
+
+            incl = np.arccos(b/a)
+            PA   = (-np.arctan2(Xedge[idx_max] - Xc, Yedge[idx_max] - Yc) - np.pi/2) % (2*np.pi)
+            xc_p, yc_p = Tools.orthogonal_projection((xs, ys), (Xc, Yc), PA)
+            H = np.sqrt((xc_p - Xc)**2 + (yc_p - Yc)**2) / np.sin(incl)
+            R = a
+            H_R = H/R
+            return a, b, e, angle, (Xc, Yc), (Xedge[idx_max], Yedge[idx_max]), (xc_p, yc_p), incl, PA, H, R, H_R
+
+        def Error_PA(X_PA, Y_PA, Xc, Yc, D_X_PA, D_Y_PA, D_Xc, D_Yc):
+            d_X_PA =   1/((Y_PA - Yc) * (1 + ((X_PA - Xc)/(Y_PA - Yc))**2))
+            d_Y_PA = - (X_PA - Xc)/((Y_PA - Yc)**2 * (1 + ((X_PA - Xc)/(Y_PA - Yc))**2))
+            d_Xc   = - 1/((Y_PA - Yc) * (1 + ((X_PA - Xc)/(Y_PA - Yc))**2))
+            d_Yc   =   (X_PA - Xc)/((Y_PA - Yc)**2 * (1 + ((X_PA - Xc)/(Y_PA - Yc))**2))
+            D_PA   = np.sqrt( d_X_PA**2 * D_X_PA**2 + d_Y_PA**2 * D_Y_PA**2 + d_Xc**2 * D_Xc**2 + d_Yc**2 * D_Yc**2)
+            return D_PA
+        
         Fit_Name     = f'{self.disk_name}.{(self.img_name[0]).lower()}fit'
-        x0 = y0      = int(len(self.image)/2)
+        xs = ys      = int(len(self.image)/2)
 
         nb_rand     = 100
         nb_peaks    = len(self.point_cloud)
         peaks_range = np.arange(0, nb_peaks, 4)
-        nb_peaks_range = len(peaks_range)
         nb_points   = 100
-
         step = 0
 
-        Inclination   = []
-        X_coords_PositionAngle = []
-        Y_coords_PositionAngle = []
-        Radius        = []
-        Height        = []
-        Aspect        = []
+        #   First Estimation
+        f_a, f_b, f_e, angle, (f_Xc, f_Yc), (f_X_PA, f_Y_PA), (f_xc_p, f_yc_p), f_incl, f_PA, f_H, f_R, f_H_R = Parameters_Estimation(self.point_cloud, xs, ys)
+        # f_Xe, f_Ye = Tools.Ellipse(f_incl, f_R, f_R, f_H, f_PA, chi, f_xc_p, f_yc_p)
 
-        X_center  = []
-        Y_center  = []
-        X_ellipse = []
-        Y_ellipse = []
-        f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(self.point_cloud, x0, y0)
-        # f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(np.column_stack((self.point_cloud[:, 0], self.point_cloud[:, 1])), x0, y0)
-        f_PA = ((-np.arctan2(f_y_coords_PA, f_x_coords_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
-        print(np.degrees(f_PA))
+        nb_peaks      = len(self.point_cloud)
+        peaks_range   = np.arange(0, nb_peaks, 4)    
+
+        Inclination = []
+
+        X_PositionAngle = []
+        Y_PositionAngle = []
+
+        X_center = []
+        Y_center = []
+
+        Xp_center = []
+        Yp_center = []
+
+        Height = []
+        Radius = []
+
         for dec in peaks_range:   # Offset starting point from 4 index position, to remove too close points 
             filtered_Points = Tools.filtrer_nuage_points(self.point_cloud, self.r_beam, dec=dec)
-            incl, (x_coords_PA, y_coords_PA), R, H, aspect, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(filtered_Points, x0, y0)
-            PA = ((-np.arctan2(y_coords_PA, x_coords_PA)) % (2*np.pi) - np.pi/2) % (2*np.pi)
-            std_ellipse = Tools.Std_Ellipse(filtered_Points, Xe, Ye, Xc, Yc)
-            xc_p, yc_p, _ = Tools.orthogonal_projection((x0, y0), (Xc, Yc), PA)
-            for n in range(nb_rand):
-                Random_Radius       = np.random.normal(R, std_ellipse, nb_points)
-                Random_Phi          = np.random.uniform(0, 2*np.pi, nb_points)
-                Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1.219, Random_Radius, Random_Phi, x0=xc_p, y0=yc_p)
-                inclination, (x_coords_pa, y_coords_pa), radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
-                Inclination.append(inclination)
-                X_coords_PositionAngle.append(x_coords_pa)
-                Y_coords_PositionAngle.append(y_coords_pa)
-                Radius.append(radius)
-                Height.append(height)
-                Aspect.append(h_r)
+            filter_a, filter_b, filter_e, filter_angle, (filter_Xc, filter_Yc), (filter_X_PA, filter_Y_PA), (filter_xc_p, filter_yc_p), filter_incl, filter_PA, filter_H, filter_R, filter_H_R = Parameters_Estimation(filtered_Points, xs, ys)
+            filter_Xe, filter_Ye = Tools.Ellipse(filter_incl, filter_R, filter_R, filter_H, filter_PA, chi, filter_xc_p, filter_yc_p)
+            std_ellipse = Tools.Std_Ellipse(filtered_Points, filter_Xe, filter_Ye, filter_Xc, filter_Yc)
+
+            for n in range(100):
+                Random_Radius = np.random.normal(filter_R, std_ellipse, 360)
+                Random_Xe, Random_Ye = Tools.Ellipse(filter_incl, Random_Radius, filter_R, filter_H, filter_PA, chi, filter_xc_p, filter_yc_p)
+                a, b, e, angle, (Xc, Yc), (X_PA, Y_PA), (xc_p, yc_p), incl, PA, H, R, H_R = Parameters_Estimation(np.column_stack((Random_Xe, Random_Ye)), xs, ys)
+                Inclination.append(incl)
+                X_PositionAngle.append(X_PA)
+                Y_PositionAngle.append(Y_PA)
                 X_center.append(Xc)
                 Y_center.append(Yc)
-                X_ellipse.append(Xe)
-                Y_ellipse.append(Ye)
-                step += 1
-                self.progress.setValue(int(100*step/(nb_rand*nb_peaks_range)))
-
-        incl = np.mean(Inclination)
-        X_coords = np.mean(X_coords_PositionAngle)
-        Y_coords = np.mean(Y_coords_PositionAngle)
-        PA_Radius   = np.sqrt(X_coords**2 + Y_coords**2)
-        PA   = ((-np.arctan2(     Y_coords,      X_coords)) % (2*np.pi) - np.pi/2) % (2*np.pi)
+                Xp_center.append(xc_p)
+                Yp_center.append(yc_p)
+                Radius.append(R)
+                Height.append(H)
+        
+        Incl = np.mean(Inclination)
         R    = np.mean(Radius)
         H    = np.mean(Height)
-        H_R  = np.mean(Aspect)
+        H_R  = H/R
+        X_PA = np.mean(X_PositionAngle)
+        Y_PA = np.mean(Y_PositionAngle)
+        Xc   = np.mean(X_center)
+        Yc   = np.mean(Y_center)
+        Xc_p = np.mean(Xp_center)
+        Yc_p = np.mean(Yp_center)
+        PA   = (-np.arctan2(X_PA - Xc, Y_PA - Yc) - np.pi/2) % (2*np.pi)
 
-        D_incl = np.std(Inclination)
-        D_PA   = np.sqrt(-2*np.log(PA_Radius))
-        D_R    = np.std(Radius)
-        D_H    = np.std(Height)
-        D_H_R  = np.std(Aspect)
+        D_incl    = np.std(Inclination)
+        D_X_PA    = np.std(X_PositionAngle)
+        D_Y_PA    = np.std(Y_PositionAngle)
+        D_Xc      = np.std(X_center)
+        D_Yc      = np.std(Y_center)
+        D_Xc_p    = np.mean(Xp_center)
+        D_Yc_p    = np.mean(Yp_center)
+        D_PA      = Error_PA(X_PA, Y_PA, Xc, Yc, D_X_PA, D_Y_PA, D_Xc, D_Yc)
+        D_H       = np.std(Height)
+        D_R       = np.std(Radius)
+        D_H_R     = np.sqrt((D_H/H)**2 + (D_R/R)**2)
 
-        Xc = np.mean(X_center)
-        Yc = np.mean(Y_center)
-        # Xc = f_Xc
-        # Yc = f_Yc
 
-        D_Xc = np.std(X_center)
-        D_Yc = np.std(Y_center)
+        # Inclination   = []
+        # X_coords_PositionAngle = []
+        # Y_coords_PositionAngle = []
+        # Radius        = []
+        # Height        = []
+        # Aspect        = []
 
-        Xe = np.mean(np.array(X_ellipse), axis=0)
-        Ye = np.mean(np.array(Y_ellipse), axis=0)
-        # Xe = f_Xe
-        # Ye = f_Ye
+        # X_center  = []
+        # Y_center  = []
+        # X_ellipse = []
+        # Y_ellipse = []
 
-        D_Xe = np.std(np.array(X_ellipse), axis=0)
-        D_Ye = np.std(np.array(Y_ellipse), axis=0)
+        # f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(self.point_cloud, x0, y0)
+        # f_PA = -(np.arctan2(np.abs(f_x_coords_PA - f_Xc), np.abs(f_y_coords_PA - f_Yc)) + 3*np.pi/2) % (2*np.pi)
+        # for dec in peaks_range:   # Offset starting point from 4 index position, to remove too close points 
+        #     filtered_Points = Tools.filtrer_nuage_points(self.point_cloud, self.r_beam, dec=dec)
 
-        Data_to_Save    = { "params"        : [  incl,   R,   H,   H_R, 1.219,   PA,   Xe,   Ye,   Xc,   Yc],      # Based on Avenhaus et al. 2018         and         Kenyon & Hartmann 1987 
-                            "Err"           : [D_incl, D_R, D_H, D_H_R, 0.000, D_PA, D_Xe, D_Ye, D_Xc, D_Yc], 
-                            "first_estim"   : [f_incl, f_R, f_H, f_H_R, 1.219, f_PA, f_Xe, f_Ye, f_Xc, f_Yc],
+        #     filter_incl, (filter_x_coords_PA, filter_y_coords_PA), filter_R, filter_H, filter_aspect, filter_Xe, filter_Ye, filter_Xc, filter_Yc = Tools.Ellipse_Estimation(filtered_Points, x0, y0)
+        #     filter_PA = -(np.arctan2(np.abs(filter_x_coords_PA - filter_Xc), np.abs(filter_y_coords_PA - filter_Yc)) + 3*np.pi/2) % (2*np.pi)
+        #     std_ellipse = Tools.Std_Ellipse(filtered_Points, filter_Xe, filter_Ye, filter_Xc, filter_Yc)
+        #     for n in range(nb_rand):
+        #         Random_Radius       = np.random.normal(filter_R, std_ellipse, nb_points)
+        #         Yrand, Xrand         = Tools.get_ellipse_pts((filter_Yc, filter_Xc, Random_Radius, Random_Radius*np.cos(filter_incl), np.sqrt(1 - np.cos(filter_incl)**2), filter_PA))
+        #         inclination, (x_coords_pa, y_coords_pa), radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
+                
+        #         Inclination.append(inclination)
+        #         X_coords_PositionAngle.append(x_coords_pa)
+        #         Y_coords_PositionAngle.append(y_coords_pa)
+        #         Radius.append(radius)
+        #         Height.append(height)
+        #         Aspect.append(h_r)
+        #         X_center.append(Xc)
+        #         Y_center.append(Yc)
+        #         X_ellipse.append(Xe)
+        #         Y_ellipse.append(Ye)
+        #         step += 1
+        #         self.progress.setValue(int(100*step/(nb_rand*len(peaks_range))))
+
+        # incl = np.mean(Inclination)
+        # mean_X_PA = np.mean(X_coords_PositionAngle)
+        # mean_Y_PA = np.mean(Y_coords_PositionAngle)
+        # PA_Radius   = np.sqrt(mean_X_PA**2 + mean_Y_PA**2)
+        # # PA   = ((-np.arctan2(Y_coords, X_coords)) % (2*np.pi) + np.pi/2) % (2*np.pi)
+        # Xc = np.mean(X_center)
+        # Yc = np.mean(Y_center)
+
+        # PA = -(np.arctan2(np.abs(mean_X_PA - Xc), np.abs(mean_Y_PA - Yc)) + 3*np.pi/2) % (2*np.pi)
+        # H    = np.mean(Height)
+        # R    = np.mean(Radius)
+        # H_R  = np.mean(H/R)
+        # H_R  = np.mean(Aspect)
+        # Xe = np.mean(np.array(X_ellipse), axis=0)
+        # Ye = np.mean(np.array(Y_ellipse), axis=0)
+
+        # D_incl = np.std(Inclination)
+        # D_Xc = np.std(X_center)
+        # D_Yc = np.std(Y_center)
+        # D_PA   = np.sqrt(-2*np.log(PA_Radius))
+        # D_H    = np.std(Height)
+        # D_R    = np.std(Radius)
+        # D_H_R  = np.std(Aspect)
+        # D_Xe = np.std(np.array(X_ellipse), axis=0)
+        # D_Ye = np.std(np.array(Y_ellipse), axis=0)
+
+        Data_to_Save    = { "params"        : [  incl,   R,   H,   H_R,   chi,   PA,   Xc,   Yc,   Xc_p,   Yc_p],      # Based on Avenhaus et al. 2018         and         Kenyon & Hartmann 1987 
+                            "Err"           : [D_incl, D_R, D_H, D_H_R, 0.000, D_PA, D_Xc, D_Yc, D_Yc_p, D_Yc_p], 
+                            "first_estim"   : [f_incl, f_R, f_H, f_H_R,   chi, f_PA, f_Xc, f_Yc, f_xc_p, f_yc_p],
                             'Points'        : [self.point_cloud, self.point_All], 
                             "Data"          : self.image,
                             "Filters"       : {"gaussian_filter" : self.gaussian_value, 
@@ -2333,105 +2414,6 @@ class FilteringWindow(QDialog):
                                                 "Mincut_Radius"   : self.MinCutRad_value, 
                                                 "Maxcut_Radius"   : self.MaxCutRad_value, 
                                                 "method"          : self.Method_Value}}
-
-
-        # X, Y         = self.point_cloud[:, 1], self.point_cloud[:, 0]
-        # All_X, All_Y = self.point_All[:, 1], self.point_All[:, 0]
-
-        # coeffs       = Tools.fit_ellipse(np.array(X), np.array(Y))
-        # Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
-
-        # incl           = np.arccos(b/a)
-        # PA             = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
-        # X_e, Y_e       = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
-        # D              = Tools.Height_Compute(X_e, Y_e, x0, y0)
-        # H              = D / np.sin(incl)
-        # R              = a
-        # Aspect         = H/R
-
-        # First_Ellipse_points = [Xc, Yc, X_e, Y_e, a, b, e, X, Y, All_X, All_Y]
-        # First_Estimation     = [incl, R, H, Aspect, 1.219, PA]
-
-        # X_unif, Y_unif = Tools.uniform_ellipse(incl, PA, H, R, 1, R, self.r_beam, x0=x0, y0=y0, init=0)
-        # X = []
-        # Y = []
-        # ny = nx = len(self.image)
-        # mapy, mapx = np.indices((ny, nx))
-        # for idx in range(len(X_unif)):
-        #     mask                  = (mapx - X_unif[idx]) ** 2 + (mapy - Y_unif[idx]) ** 2 <= self.r_beam ** 2
-        #     intensities_in_circle = self.image[mask]
-        #     max_index             = np.argmax(intensities_in_circle)
-        #     mask_indices          = np.where(mask)
-        #     max_y, max_x          = mask_indices[0][max_index], mask_indices[1][max_index]
-        #     X.append(max_y)
-        #     Y.append(max_x)
-        # X = np.array(X)
-        # Y = np.array(Y)
-
-        # coeffs                   = Tools.fit_ellipse(X, Y)
-        # Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
-        # incl                     = np.arccos(b/a)
-        # PA                       = Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE)
-        # X_e, Y_e                 = Tools.get_ellipse_pts((Xc, Yc, a, b, e, PA))
-        # D                        = Tools.Height_Compute(X_e, Y_e, x0, y0)
-        # H                        = D / np.sin(incl)
-        # R                        = a
-        # Aspect                   = H/R
-        # Ellipse_points           = [Xc, Yc, X_e, Y_e, a, b, e]
-
-        # Point_Offset = []
-        # for idx in range(len(X)):
-        #     idx_dist     = np.argmin(np.sqrt((X_e - X[idx])**2 + (Y_e - Y[idx])**2))
-        #     ellipse_dist = np.sqrt((Xc - X_e[idx_dist])**2 + (Yc - Y_e[idx_dist])**2)
-        #     point_dist   = np.sqrt((Xc - X[idx])**2        + (Yc - Y[idx])**2)
-        #     dist         = ellipse_dist - point_dist
-        #     Point_Offset.append(dist)
-    
-        # Inclinations    = []
-        # PositionAngles  = []
-        # Heights         = []
-        # Mid_Radius      = []
-        # for step in range(self.nb_steps):
-        #     self.progress.setValue(step + 1)
-        #     nb_points = 100
-        #     Radius       = np.random.normal(R, np.std(Point_Offset), nb_points)
-        #     Phi          = np.random.uniform(0, 2*np.pi, nb_points)
-        #     # Xrand, Yrand = Tools.Random_Ellipse(Radius, Phi, x0, y0, incl, R, H, 1, PA)
-        #     Xrand, Yrand = Tools.ellipse(incl, PA, H, R, 1, Radius, Phi, x0=x0, y0=y0)
-        #     coeffs = Tools.fit_ellipse(np.array(Xrand), np.array(Yrand))
-        #     Xc, Yc, a, b, e, PA_LSQE = Tools.cart_to_pol(coeffs)
-        #     D_inclinations = np.arccos(b/a)
-        #     Inclinations.append(D_inclinations)
-        #     PositionAngles.append(Tools.My_PositionAngle(x0, y0, Yc, Xc, a, b, e, PA_LSQE))
-
-        #     D_D            = Tools.Height_Compute(X_e, Y_e, x0, y0)
-        #     D_H            = D_D / np.sin(D_inclinations)
-        #     Heights.append(D_H)
-        #     Mid_Radius.append(a)
-        # D_incl   = np.std(Inclinations)
-        # D_PA     = np.std(PositionAngles)
-        # D_H      = np.std(Heights)
-        # D_R      = np.std(Mid_Radius)
-        # D_Chi    = 0
-        # D_Aspect = Aspect * np.sqrt((D_R/R)**2 + (D_H/H)**2)
-
-        # Data_to_Save    = { "params"        : [incl, R, H, Aspect, 1.219, PA],      # Based on Avenhaus et al. 2018         and         Kenyon & Hartmann 1987 
-        #                     "first_estim"   : First_Estimation,
-        #                     "Err"           : [D_incl, D_R, D_H, D_Aspect, D_Chi, D_PA], 
-        #                     'Points'        : [X, Y, All_X, All_Y], 
-        #                     "Ellipse"       : Ellipse_points,
-        #                     "first_ellipse" : First_Ellipse_points,
-        #                     "Data"          : self.image,
-        #                     "Filters"       : {"gaussian_filter" : self.gaussian_value, 
-        #                                        "smooth_filter"   : self.smooth_value, 
-        #                                        "prominence"      : self.Prominence_value,
-        #                                        "distance"        : self.Distance_value, 
-        #                                        "width"           : self.Width_value, 
-        #                                        "HighPass"        : self.HighPass_value, 
-        #                                        "Mincut_Radius"   : self.MinCutRad_value, 
-        #                                        "Maxcut_Radius"   : self.MaxCutRad_value, 
-        #                                        "method"          : self.Method_Value}}
-
         with open(f"{self.folderpath}/DRAGyS_Results/{Fit_Name}", 'wb') as fichier:
             pkl.dump(Data_to_Save, fichier)
         self.Filtering_Fig.clf()
@@ -2445,9 +2427,6 @@ class Launcher:
     """
     def Run():
         app = QApplication(sys.argv)
-        # app.setStyle(QStyleFactory.create("Fusion"))  # Applique un style stable
-        # app.setStyle(QStyleFactory.create("Windows"))  # Applique un style stable
-
         ex = DRAGyS()  # Instancie la fenêtre principale
         app.setWindowIcon(QIcon("DRAGYS.ico"))
         ex.show()
