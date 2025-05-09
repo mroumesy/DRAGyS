@@ -52,6 +52,8 @@ class DRAGyS(QWidget):
         self.Image_Displayed    = False
         self.Display_EZ         = False
         self.CheckEZ            = False
+        self.CorrectCorona      = False
+
         self.fit_type = 'Polarized'
         self.img_type = 'Polarized'
         self.AzimuthalAngle = np.linspace(0, 359, 360)
@@ -92,7 +94,6 @@ class DRAGyS(QWidget):
         self.Label_Fitting          = QLabel("No fitting file found", self)
         self.UseFittingButton.setEnabled(False)
         self.UseFittingButton.clicked.connect(self.FittingType)
-        # self.UseFittingButton.setFixedWidth(180)
         self.Inclination_text       = QLabel('i = ', self)
         self.PositionAngle_text     = QLabel('PA = ', self)
         self.Scale_Height_text      = QLabel('h/r = ', self)
@@ -275,11 +276,14 @@ class DRAGyS(QWidget):
         self.R_out_entry.setFixedWidth(100)
         self.R_adjustement = QCheckBox('Display Extraction Zone', self)
         self.R_adjustement.setEnabled(False)
+        self.CheckCoronagraph = QCheckBox('Coronagraph Transmission', self)
+        self.CheckCoronagraph.setEnabled(False)
         self.R_in_entry.valueChanged.connect(self.Extraction_Zone)
         self.R_out_entry.valueChanged.connect(self.Extraction_Zone)
         self.R_in_entry.lineEdit().returnPressed.connect(self.Extraction_Zone)
         self.R_out_entry.lineEdit().returnPressed.connect(self.Extraction_Zone)
         self.R_adjustement.stateChanged.connect(self.Ring_Adjust_2)
+        self.CheckCoronagraph.stateChanged.connect(self.Coronagraph_Correction)
 
         # Zoom button
         self.ZoomLabel  = QLabel("Zoom : ", self)
@@ -313,6 +317,7 @@ class DRAGyS(QWidget):
         self.List_Buttons.append(self.Display_Fit_button)
         self.List_Buttons.append(self.Compute_Fit_button)
         self.List_Buttons.append(self.R_adjustement)
+        self.List_Buttons.append(self.CheckCoronagraph)
         self.List_Buttons.append(self.Compute_PhF_button)
         self.List_Buttons.append(self.Show_disk_PhF_button)
         self.List_Buttons.append(self.Show_img_PhF_button)
@@ -491,6 +496,7 @@ class DRAGyS(QWidget):
         RightParaBox.addLayout(R_inbox)
         RightParaBox.addLayout(R_outbox)
         RightParaBox.addWidget(self.R_adjustement)
+        RightParaBox.addWidget(self.CheckCoronagraph)
 
         ParaBox = QFrame()
         ParaBox.setFrameShape(QFrame.Shape.StyledPanel)
@@ -678,6 +684,8 @@ class DRAGyS(QWidget):
         """
         self.R_adjustement.setEnabled(True)
         self.R_adjustement.setChecked(False)
+        self.CheckCoronagraph.setEnabled(True)
+        self.CheckCoronagraph.setChecked(False)
         self.CheckEZ = False
         self.ax.cla()
         self.ax.set_ylabel('$\Delta$ RA (arcsec)')
@@ -751,7 +759,37 @@ class DRAGyS(QWidget):
         except:
             SERGE = "Scattering Extraction from Ring Geometry Estimation"
         if self.Data_Type == "MCFOST_Data":
-            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(1e-3 * np.max(self.img_chose), vmin=np.min(self.img_chose), vmax=np.max(self.img_chose), clip=True))
+        else :
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.LogNorm())
+        self.Zoom_Slider_Update(self.ZoomSlider.value())
+
+    def Coronagraph_Correction(self, state):
+        """
+        Manages the correction of Coronagraph, and display images.
+
+        Parameters
+        ----------
+        state    :  int
+                    state of the checkbox: 0=unchecked
+        """
+        pixelscale  = float(self.pixelscale_entry.value())
+        W           = float(self.wavelength_entry.value())
+        Corono_mask = Tools.Correct_Corono_Transmission(self.img_chose, W, pixelscale, output="R2_mask")
+        
+        if state == 0:
+            self.img_chose = self.img_chose * Corono_mask
+            self.CorrectCorona = False
+        else: # Checkbox is uncheck at first. so first check should compute coronagraph correction (/mask), state==0 append only on the second check, so it will remove the correction be mupltiplying by mask 
+            self.img_chose = self.img_chose / Corono_mask
+            self.CorrectCorona = True
+
+        try:
+            self.displayed_img.remove()
+        except:
+            GARPS = "Geometry Adjustment using Ring Provide Scattering"
+        if self.Data_Type == "MCFOST_Data":
+            self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.SymLogNorm(1e-3 * np.max(self.img_chose), vmin=np.min(self.img_chose), vmax=np.max(self.img_chose), clip=True))
         else :
             self.displayed_img = self.ax.imshow(self.img_chose, extent=[self.Size, -self.Size, -self.Size, self.Size], origin='lower', cmap="inferno", norm=colors.LogNorm())
         self.Zoom_Slider_Update(self.ZoomSlider.value())
@@ -934,7 +972,7 @@ class DRAGyS(QWidget):
             ax.set_facecolor('black')
             ax.set_title("Numerically Stable Direct \n Least Squares Fitting of Ellipses", fontweight='bold')
             if self.Data_Type == "MCFOST_Data":
-                ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose))
+                ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.SymLogNorm(1e-3 * np.max(self.img_chose), vmin=np.min(self.img_chose), vmax=np.max(self.img_chose)))
             else :
                 ax.imshow(self.img_chose, origin='lower', extent=[size, -size, -size, size], cmap="inferno", norm=colors.LogNorm())
 
@@ -942,9 +980,10 @@ class DRAGyS(QWidget):
             ax.scatter(-(f_Xc*PixelScale - size), f_Yc*PixelScale - size, marker='.', color='darkred') # given points
             ax.scatter(-(f_xc_p*PixelScale - size), f_xc_p*PixelScale - size, marker='.', color='darkblue') # given points
             ax.scatter(-(  Xc*PixelScale - size),   Yc*PixelScale - size, marker='.', color='darkgreen') # given points
+            
             # ax.plot( (f_Y_e-center)*PixelScale, (f_X_e-center)*PixelScale, label="first ellipse fit", color='red')
             # ax.plot((Ye - center + Yc)*PixelScale, (Xe - center + Xc)*PixelScale, label="ellipse fit", color='blue')
-            ax.plot(-(  X_e*PixelScale - size),   Y_e*PixelScale - size, color='darkgreen')
+            ax.plot(-(  X_e*PixelScale - size),   Y_e*PixelScale - size, color='cyan', linewidth=2, zorder=100)
             ax.plot(-(f_X_e*PixelScale - size), f_Y_e*PixelScale - size, color='darkred')
             ax.set_xlim(-x_min, -x_max)
             ax.set_ylim(x_min, x_max)
@@ -986,10 +1025,10 @@ class DRAGyS(QWidget):
             self.CheckEZ = False
             self.R_adjustement.setChecked(False)
             if self.Display_EZ:
-                self.ellipse_in.remove()
+                # self.ellipse_in.remove()
                 for fill_obj in self.ellipse_zone:
                     fill_obj.remove()
-                self.ellipse_out.remove()
+                # self.ellipse_out.remove()
                 self.canvas.draw()
                 self.Display_EZ = False
         else:
@@ -1004,8 +1043,8 @@ class DRAGyS(QWidget):
         if self.CheckEZ:
             
             if self.Display_EZ:
-                self.ellipse_in.remove()
-                self.ellipse_out.remove()
+                # self.ellipse_in.remove()
+                # self.ellipse_out.remove()
                 for fill_obj in self.ellipse_zone:
                     fill_obj.remove()
                 self.Display_EZ = False
@@ -1030,9 +1069,9 @@ class DRAGyS(QWidget):
 
             self.ellipse_zone = self.ax.fill(np.append(-X_in, -X_out[::-1]), 
                                              np.append(Y_in, Y_out[::-1]), 
-                                             color='gold', alpha=0.4, linestyle='')
-            self.ellipse_in   = self.ax.scatter(-X_in, Y_in, c='orange', s=1)
-            self.ellipse_out  = self.ax.scatter(-X_out, Y_out, c='orange', s=1)
+                                             color='cyan', alpha=0.2, linestyle='')
+            # self.ellipse_in   = self.ax.scatter(-X_in, Y_in, c='orange', s=1)
+            # self.ellipse_out  = self.ax.scatter(-X_out, Y_out, c='orange', s=1)
             self.canvas.draw()
             self.Display_EZ = True
     
@@ -1089,31 +1128,16 @@ class DRAGyS(QWidget):
         # If an offset is founded between star and ellipse center, i.e, if disk is not centered with the central star, it is automatically considered
         with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
                 Loaded_Data = pkl.load(fichier)
-        [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
+        [_, _, _, _, _, _, _, _, xc_P, yc_P] = Loaded_Data["params"]
+        [_, _, _, _, _, _, _, _, D_xc_P, D_yc_P] = Loaded_Data["Err"]
 
-        # if self.InputStar:
-        #     with open(f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.fit_type[0]).lower()}fit", 'rb') as fichier:
-        #         Loaded_Data = pkl.load(fichier)
-        #     [_, _, _, _, _, _, _, _, Xc, Yc] = Loaded_Data["params"]
-        # else:
-        #     Xc, Yc = None, None
-
-        xc_P, yc_P = Tools.orthogonal_projection((xs, ys), (Xc, Yc), self.PA)
-        xc_P, yc_P = xs, ys
         start = time.time()
-        self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 7
+        self.total_steps = (2 * 300*360 + 3*len(self.img_0)*len(self.img_0) + 2*n_bin) * 8
         self.computation_step = 0
+        
+        Params = [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl, self.PA, self.r_ref, self.h_ref, self.alpha, (D_xc_P, D_yc_P), self.D_incl, self.D_PA, self.D_r_ref, self.D_h_ref, R_in, R_out, n_bin, self.AzimuthalAngle, self.CorrectCorona]
+        Tools.SPF_Random(Params, self.folderpath, self.file_name, self.img_type)
 
-        Corono_mask = Tools.Correct_Corono_Transmission(self.img_chose, W, pixelscale, output="R2_mask")
-
-        list_params_SPF = [ [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Total"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl - self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl + self.D_incl, self.PA,             self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Incl"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA - self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA + self.D_PA, self.r_ref, self.h_ref, self.aspect,                    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "PA"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect - self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"],
-                            [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl,               self.PA,             self.r_ref, self.h_ref, self.aspect + self.D_aspect,    self.alpha, self.D_incl, self.D_r_ref, self.D_h_ref, self.D_aspect, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask, "Aspect"]]
-        Tools.Compute_SPF(list_params_SPF, self.folderpath, self.file_name, self.img_type)
         end = time.time()
         self.Is_computed.setText(" SPF computed - time = " +str(np.round(end-start, 2)) + ' seconds')
         self.Is_computed.setStyleSheet('color: green')
@@ -1367,7 +1391,7 @@ class DRAGyS(QWidget):
             Tool_Could_Also_be_named = 'DRAGyS'
         self.Img_PhF = QWidget()
         self.Img_PhF.setWindowTitle("Phase Functions")
-        Fig_img_phF = plt.figure(figsize = (9, 4))#, dpi = 300)
+        Fig_img_phF = plt.figure(figsize = (11, 4))#, dpi = 300)
         ax_img_Extraction   = plt.subplot2grid((1, 5), (0, 0), colspan=2, rowspan=1)
         ax_phF              = plt.subplot2grid((1, 5), (0, 2), colspan=3, rowspan=1)
 
@@ -1375,31 +1399,10 @@ class DRAGyS(QWidget):
         ax_img_Extraction.clear()
         
         Canvas_Img_PhF = FigureCanvas(Fig_img_phF)
-        Toolbar = NavigationToolbar(Canvas_Img_PhF, self)
+        Toolbar        = NavigationToolbar(Canvas_Img_PhF, self)
         layout_Img_PhF = QVBoxLayout()
-        folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"
-        Scatt,      PI,      LB,      Err_Scatt,      Err_PI,      Err_LB      = Tools.Get_SPF(folder, side='All')
-        Scatt_east, PI_east, LB_east, Err_Scatt_east, Err_PI_east, Err_LB_east = Tools.Get_SPF(folder, side='East')
-        Scatt_west, PI_west, LB_west, Err_Scatt_west, Err_PI_west, Err_LB_west = Tools.Get_SPF(folder, side='West')
-        PI_LB        = PI/LB
-        Err_PI_LB    = PI_LB  * np.sqrt((Err_PI/PI)**2   + (Err_LB/LB)**2)
-        PI_east      = PI_east/LB_east
-        Err_PI_east  = PI_east  * np.sqrt((Err_PI_east/PI_east)**2   + (Err_LB_east/LB_east)**2)
-        PI_west      = PI_west/LB_west
-        Err_PI_west  = PI_west  * np.sqrt((Err_PI_west/PI_west)**2   + (Err_LB_west/LB_west)**2)
- 
-        normPI      = np.interp(90, Scatt, PI)
-        normPI_LB   = np.interp(90, Scatt, PI_LB)
-        normPI_east = np.interp(90, Scatt_east, PI_east)
-        normPI_west = np.interp(90, Scatt_west, PI_west)
 
-
-        PI,      Err_PI      = PI/(normPI),           Err_PI/(normPI)
-        PI_LB,   Err_PI_LB   = PI_LB/(normPI_LB),     Err_PI_LB/(normPI_LB)
-        PI_east, Err_PI_east = PI_east/(normPI_east), Err_PI_east/(normPI_east)
-        PI_west, Err_PI_west = PI_west/(normPI_west), Err_PI_west/(normPI_west)
-
-
+        # Display image and Extraction Zone
         R_in = float(self.R_in_entry.value())
         R_out = float(self.R_out_entry.value())
         Side = self.Compute_Side()
@@ -1407,9 +1410,9 @@ class DRAGyS(QWidget):
         size = len(self.img_0)
         arcsec_extent = size/2 * pixelscale
         if self.Data_Type == 'MCFOST_Data':
-            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.SymLogNorm(linthresh=self.thresh_chose), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+            ax_img_Extraction.imshow(self.img_chose, cmap="inferno", norm=colors.SymLogNorm(1e-3 * np.max(self.img_chose), vmin=np.min(self.img_chose), vmax=np.max(self.img_chose)), extent=[arcsec_extent, -arcsec_extent, -arcsec_extent, arcsec_extent])
         else :
-            ax_img_Extraction.imshow(self.img_chose, origin='lower', cmap="inferno", norm=colors.LogNorm(), extent=[-arcsec_extent, arcsec_extent, -arcsec_extent, arcsec_extent])
+            ax_img_Extraction.imshow(self.img_chose, cmap="inferno", norm=colors.LogNorm(), extent=[arcsec_extent, -arcsec_extent, -arcsec_extent, arcsec_extent])
         d = float(self.distance_entry.value())
         FoV_au = d * (648000/np.pi) * np.tan(pixelscale*size/3600 * np.pi/180)
         pixelscale_au = FoV_au/size
@@ -1418,21 +1421,41 @@ class DRAGyS(QWidget):
             Loaded_Data = pkl.load(fichier)
         [_, _, _, _, _, _, Xc, Yc, xc_p, yc_p] = Loaded_Data["params"]
 
-        X_in,  Y_in  = Tools.Ellipse(self.incl,  R_in/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
-        X_out, Y_out = Tools.Ellipse(self.incl, R_out/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p)
+        X_in,  Y_in  = Tools.Ellipse(self.incl,  R_in/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p, Phi=np.radians(np.linspace(0, 179.99, 181)))
+        X_out, Y_out = Tools.Ellipse(self.incl, R_out/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p, Phi=np.radians(np.linspace(0, 179.99, 181)))
 
-        X_in  = (X_in  - size/2)*pixelscale
-        X_out = (X_out - size/2)*pixelscale
-        Y_in  = (Y_in  - size/2)*pixelscale
-        Y_out = (Y_out - size/2)*pixelscale
+        X_in  = -(X_in  - size/2)*pixelscale
+        X_out = -(X_out - size/2)*pixelscale
+        Y_in  = -(Y_in  - size/2)*pixelscale
+        Y_out = -(Y_out - size/2)*pixelscale
         ax_img_Extraction.set_facecolor('black')
-        ax_img_Extraction.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), color='gold', alpha=0.4, linestyle='')
-        ax_img_Extraction.scatter(X_in,  Y_in,  s=1, c='orange')
-        ax_img_Extraction.scatter(X_out, Y_out, s=1, c='orange')
+        ax_img_Extraction.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), color='red', alpha=0.4, linestyle='')
 
-        ax_phF.errorbar(Scatt, PI, xerr=Err_Scatt, yerr=np.abs(Err_PI), marker='.', capsize=2, color='black', label='LB uncorrected', ls='dashed', alpha=0.2)
-        ax_phF.errorbar(Scatt, PI_LB,  xerr=Err_Scatt, yerr=np.abs(Err_PI_LB), marker='.', capsize=2, color='black', label='LB corrected')
-        if 'MCFOST' in self.file_name:
+        X_in,  Y_in  = Tools.Ellipse(self.incl,  R_in/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p, Phi=np.radians(np.linspace(180, 359.99, 181)))
+        X_out, Y_out = Tools.Ellipse(self.incl, R_out/pixelscale_au, self.r_ref, self.h_ref, self.PA, self.alpha, xc_p, yc_p, Phi=np.radians(np.linspace(180, 359.99, 181)))
+
+        X_in  = -(X_in  - size/2)*pixelscale
+        X_out = -(X_out - size/2)*pixelscale
+        Y_in  = -(Y_in  - size/2)*pixelscale
+        Y_out = -(Y_out - size/2)*pixelscale
+        ax_img_Extraction.set_facecolor('black')
+        ax_img_Extraction.fill(np.append(X_in, X_out[::-1]), np.append(Y_in, Y_out[::-1]), color='blue', alpha=0.4, linestyle='')
+
+
+        # Display SPF for all, west, east, and LB Correction
+        folder = f"{self.folderpath}/DRAGyS_Results/{self.disk_name}.{(self.img_type[0]).lower()}spf"
+        Sca_lb, SPF_lb, _, D_Sca_lb, D_SPF_lb, _ = Tools.Get_SPF(folder, side='All',  norm='90', LBCorrected=False)
+        Sca_a,  SPF_a,  _, D_Sca_a,  D_SPF_a,  _ = Tools.Get_SPF(folder, side='All',  norm='90', LBCorrected=True)
+        Sca_e,  SPF_e,  _, D_Sca_e,  D_SPF_e,  _ = Tools.Get_SPF(folder, side='East', norm='90', LBCorrected=True)
+        Sca_w,  SPF_w,  _, D_Sca_w,  D_SPF_w,  _ = Tools.Get_SPF(folder, side='West', norm='90', LBCorrected=True)
+        
+        ax_phF.errorbar(Sca_lb, SPF_lb,                          yerr=np.abs(D_SPF_lb), marker='.', capsize=2, color='black', label='LB uncorrected', ls='dashed', alpha=0.2)
+        ax_phF.errorbar(Sca_a,  SPF_a,                           yerr=np.abs(D_SPF_a),  marker='.', capsize=2, color='black', label='LB corrected')
+        ax_phF.errorbar(Sca_e,  SPF_e  + (SPF_a[0] - SPF_e[0]),  yerr=np.abs(D_SPF_e),  marker='.', capsize=2, color='blue',  label='East',           ls='dotted', alpha=0.2)
+        ax_phF.errorbar(Sca_w,  SPF_w  + (SPF_a[0] - SPF_w[0]),  yerr=np.abs(D_SPF_w),  marker='.', capsize=2, color='red',   label='West',           ls='dotted', alpha=0.2)
+        
+        
+        if 'MCFOST' in self.file_path:
             MCFOST_Scatt, MCFOST_I, MCFOST_PI, MCFOST_DoP, Err_MCFOST_I, Err_MCFOST_PI, Err_MCFOST_DoP = Tools.MCFOST_PhaseFunction('/'.join(self.file_path.split('/')[:-2]), self.normalization)
             NormMCFOSTI  = np.interp(90, MCFOST_Scatt, MCFOST_I)
             NormMCFOSTPI = np.interp(90, MCFOST_Scatt, MCFOST_PI)
@@ -1443,7 +1466,7 @@ class DRAGyS(QWidget):
             else : 
                 ax_phF.errorbar(MCFOST_Scatt, np.abs(MCFOST_PI), yerr=np.abs(Err_MCFOST_PI), ls='dashed', alpha=0.5, color='purple', label='intrinsic')
 
-        ax_phF.legend(loc='upper right')
+        ax_phF.legend(loc='upper right', frameon=False)
         ax_phF.set_xlabel('Scattering angle [degree]')
         ax_phF.set_ylabel('Normalized Polarized Intensity')
         ax_phF.set_title("Normalized Polarized Phase Function")
@@ -1595,7 +1618,7 @@ class AzimuthEllipseApp(QDialog):
         """
         self.ax.clear()
         if self.Data_Type == "MCFOST_Data":
-            self.ax.imshow(self.image, origin='lower', cmap="inferno", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(linthresh=self.threshold), zorder=-1, alpha=0.5)
+            self.ax.imshow(self.image, origin='lower', cmap="inferno", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.SymLogNorm(1e-3 * np.max(self.image), vmin=np.min(self.image), vmax=np.max(self.image), clip=True), zorder=-1, alpha=0.5)
         else :
             self.ax.imshow(self.image, origin='lower', cmap="inferno", extent=[-self.img_size, self.img_size, -self.img_size, self.img_size], norm=colors.LogNorm(), zorder=-1, alpha=0.5)
         self.ax.set_xlim(-self.img_width, self.img_width)
@@ -2073,7 +2096,7 @@ class FilteringWindow(QDialog):
         
         self.Filtering_ax.set_facecolor('k')
         if self.Data_Type == "MCFOST_Data":
-            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='inferno', norm=colors.SymLogNorm(linthresh=self.threshold))
+            self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='inferno', norm=colors.SymLogNorm(1e-3 * np.max(self.image), vmin=np.min(self.image), vmax=np.max(self.image), clip=True))
         else :
             self.displayed_image = self.Filtering_ax.imshow(self.image, cmap='inferno', norm=colors.LogNorm())
         self.Filtering_ax.set_xlim(self.x_min, self.x_max)
@@ -2097,10 +2120,11 @@ class FilteringWindow(QDialog):
             self.gaussian_value = value /100
             self.Gaussian_value_Label.setText(str(self.gaussian_value))
             self.displayed_image.remove()
+            img = ndimage.gaussian_filter(self.image , sigma = self.gaussian_value)
             if self.Data_Type == "MCFOST_Data":
-                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='inferno', norm=colors.SymLogNorm(linthresh=self.threshold))
+                self.displayed_image = self.Filtering_ax.imshow(img, cmap='inferno', norm=colors.SymLogNorm(1e-3 * np.max(img), vmin=np.min(img), vmax=np.max(img), clip=True))
             else :
-                self.displayed_image = self.Filtering_ax.imshow(ndimage.gaussian_filter(self.image , sigma = self.gaussian_value), cmap='inferno', norm=colors.LogNorm())
+                self.displayed_image = self.Filtering_ax.imshow(img, cmap='inferno', norm=colors.LogNorm())
 
         elif Type=='Smooth':
             self.smooth_value = value
@@ -2272,7 +2296,6 @@ class FilteringWindow(QDialog):
 
         #   First Estimation
         f_a, f_b, f_e, angle, (f_Xc, f_Yc), (f_X_PA, f_Y_PA), (f_xc_p, f_yc_p), f_incl, f_PA, f_H, f_R, f_H_R = Parameters_Estimation(self.point_cloud, xs, ys)
-        # f_Xe, f_Ye = Tools.Ellipse(f_incl, f_R, f_R, f_H, f_PA, chi, f_xc_p, f_yc_p)
 
         nb_peaks      = len(self.point_cloud)
         peaks_range   = np.arange(0, nb_peaks, 4)    
@@ -2314,94 +2337,30 @@ class FilteringWindow(QDialog):
         Incl = np.mean(Inclination)
         R    = np.mean(Radius)
         H    = np.mean(Height)
-        H_R  = H/R
         X_PA = np.mean(X_PositionAngle)
         Y_PA = np.mean(Y_PositionAngle)
         Xc   = np.mean(X_center)
         Yc   = np.mean(Y_center)
         Xc_p = np.mean(Xp_center)
         Yc_p = np.mean(Yp_center)
+
         PA   = (-np.arctan2(X_PA - Xc, Y_PA - Yc) - np.pi/2) % (2*np.pi)
-
-        D_incl    = np.std(Inclination)
-        D_X_PA    = np.std(X_PositionAngle)
-        D_Y_PA    = np.std(Y_PositionAngle)
-        D_Xc      = np.std(X_center)
-        D_Yc      = np.std(Y_center)
-        D_Xc_p    = np.mean(Xp_center)
-        D_Yc_p    = np.mean(Yp_center)
+        H_R  = H/R
+        conf = 3
+        D_incl    = conf*np.std(Inclination)
+        D_X_PA    = conf*np.std(X_PositionAngle)
+        D_Y_PA    = conf*np.std(Y_PositionAngle)
+        D_Xc      = conf*np.std(X_center)
+        D_Yc      = conf*np.std(Y_center)
+        D_Xc_p    = conf*np.std(Xp_center)
+        D_Yc_p    = conf*np.std(Yp_center)
+        D_H       = conf*np.std(Height)
+        D_R       = conf*np.std(Radius)
         D_PA      = Error_PA(X_PA, Y_PA, Xc, Yc, D_X_PA, D_Y_PA, D_Xc, D_Yc)
-        D_H       = np.std(Height)
-        D_R       = np.std(Radius)
-        D_H_R     = np.sqrt((D_H/H)**2 + (D_R/R)**2)
-
-
-        # Inclination   = []
-        # X_coords_PositionAngle = []
-        # Y_coords_PositionAngle = []
-        # Radius        = []
-        # Height        = []
-        # Aspect        = []
-
-        # X_center  = []
-        # Y_center  = []
-        # X_ellipse = []
-        # Y_ellipse = []
-
-        # f_incl, (f_x_coords_PA, f_y_coords_PA), f_R, f_H, f_H_R, f_Xe, f_Ye, f_Xc, f_Yc = Tools.Ellipse_Estimation(self.point_cloud, x0, y0)
-        # f_PA = -(np.arctan2(np.abs(f_x_coords_PA - f_Xc), np.abs(f_y_coords_PA - f_Yc)) + 3*np.pi/2) % (2*np.pi)
-        # for dec in peaks_range:   # Offset starting point from 4 index position, to remove too close points 
-        #     filtered_Points = Tools.filtrer_nuage_points(self.point_cloud, self.r_beam, dec=dec)
-
-        #     filter_incl, (filter_x_coords_PA, filter_y_coords_PA), filter_R, filter_H, filter_aspect, filter_Xe, filter_Ye, filter_Xc, filter_Yc = Tools.Ellipse_Estimation(filtered_Points, x0, y0)
-        #     filter_PA = -(np.arctan2(np.abs(filter_x_coords_PA - filter_Xc), np.abs(filter_y_coords_PA - filter_Yc)) + 3*np.pi/2) % (2*np.pi)
-        #     std_ellipse = Tools.Std_Ellipse(filtered_Points, filter_Xe, filter_Ye, filter_Xc, filter_Yc)
-        #     for n in range(nb_rand):
-        #         Random_Radius       = np.random.normal(filter_R, std_ellipse, nb_points)
-        #         Yrand, Xrand         = Tools.get_ellipse_pts((filter_Yc, filter_Xc, Random_Radius, Random_Radius*np.cos(filter_incl), np.sqrt(1 - np.cos(filter_incl)**2), filter_PA))
-        #         inclination, (x_coords_pa, y_coords_pa), radius, height, h_r, Xe, Ye, Xc, Yc = Tools.Ellipse_Estimation(np.column_stack((Xrand, Yrand)), x0, y0)
-                
-        #         Inclination.append(inclination)
-        #         X_coords_PositionAngle.append(x_coords_pa)
-        #         Y_coords_PositionAngle.append(y_coords_pa)
-        #         Radius.append(radius)
-        #         Height.append(height)
-        #         Aspect.append(h_r)
-        #         X_center.append(Xc)
-        #         Y_center.append(Yc)
-        #         X_ellipse.append(Xe)
-        #         Y_ellipse.append(Ye)
-        #         step += 1
-        #         self.progress.setValue(int(100*step/(nb_rand*len(peaks_range))))
-
-        # incl = np.mean(Inclination)
-        # mean_X_PA = np.mean(X_coords_PositionAngle)
-        # mean_Y_PA = np.mean(Y_coords_PositionAngle)
-        # PA_Radius   = np.sqrt(mean_X_PA**2 + mean_Y_PA**2)
-        # # PA   = ((-np.arctan2(Y_coords, X_coords)) % (2*np.pi) + np.pi/2) % (2*np.pi)
-        # Xc = np.mean(X_center)
-        # Yc = np.mean(Y_center)
-
-        # PA = -(np.arctan2(np.abs(mean_X_PA - Xc), np.abs(mean_Y_PA - Yc)) + 3*np.pi/2) % (2*np.pi)
-        # H    = np.mean(Height)
-        # R    = np.mean(Radius)
-        # H_R  = np.mean(H/R)
-        # H_R  = np.mean(Aspect)
-        # Xe = np.mean(np.array(X_ellipse), axis=0)
-        # Ye = np.mean(np.array(Y_ellipse), axis=0)
-
-        # D_incl = np.std(Inclination)
-        # D_Xc = np.std(X_center)
-        # D_Yc = np.std(Y_center)
-        # D_PA   = np.sqrt(-2*np.log(PA_Radius))
-        # D_H    = np.std(Height)
-        # D_R    = np.std(Radius)
-        # D_H_R  = np.std(Aspect)
-        # D_Xe = np.std(np.array(X_ellipse), axis=0)
-        # D_Ye = np.std(np.array(Y_ellipse), axis=0)
+        D_H_R     = H_R * np.sqrt((D_H/H)**2 + (D_R/R)**2)
 
         Data_to_Save    = { "params"        : [  incl,   R,   H,   H_R,   chi,   PA,   Xc,   Yc,   Xc_p,   Yc_p],      # Based on Avenhaus et al. 2018         and         Kenyon & Hartmann 1987 
-                            "Err"           : [D_incl, D_R, D_H, D_H_R, 0.000, D_PA, D_Xc, D_Yc, D_Yc_p, D_Yc_p], 
+                            "Err"           : [D_incl, D_R, D_H, D_H_R,  0.00, D_PA, D_Xc, D_Yc, D_Xc_p, D_Yc_p], 
                             "first_estim"   : [f_incl, f_R, f_H, f_H_R,   chi, f_PA, f_Xc, f_Yc, f_xc_p, f_yc_p],
                             'Points'        : [self.point_cloud, self.point_All], 
                             "Data"          : self.image,

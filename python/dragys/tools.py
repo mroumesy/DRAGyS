@@ -6,6 +6,8 @@ from astropy.io import fits
 from scipy import ndimage, signal
 from scipy.interpolate import interp1d
 
+from itertools import chain
+
 import matplotlib.pyplot as plt
 import matplotlib.collections as mcoll
 
@@ -635,7 +637,8 @@ def orthogonal_projection(A, B, theta):
 # ============================ Scattering Phase Functions ===============================
 # =======================================================================================
 
-def SPF_V2(params):
+# Old Version of SPF Extraction, Using Extreme cases for eache geometric parameters -> compute SPF + 8 others for each parameters (+ and - error)
+def Flux_Extraction_extreme_case(params):
     """
     Compute raw SPF using geometrical parameters, extraction zone and limb brightening effet
 
@@ -678,10 +681,10 @@ def SPF_V2(params):
                      "Err_LB"       : D_LB_tot}
 
     """
-    [img, distance, pixelscale, r_beam, (xs, ys), (Xc, Yc), incl, PA, R_ref, H_ref, aspect, alpha, D_incl,   D_R_ref,    D_H_ref,    D_aspect,   R_in, R_out, n_bin, Phi, Corono_mask, Type] = params    
-    
+    [img, distance, pixelscale, r_beam, (xs, ys), (xc_p, yc_p), incl, PA, R_ref, H_ref, alpha, D_incl,   D_R_ref,    D_H_ref,   R_in, R_out, n_bin, Phi, Corono_mask, Type] = params    
+    D_aspect = np.sqrt((D_R_ref/R_ref)**2 + (D_H_ref/H_ref)**2)
     pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
-    nb_radius = round((R_out - R_in)/pixelscale_au) + 5
+    nb_radius = round((R_out - R_in)/pixelscale_au) + 5 
     Phi = np.radians(Phi)
     Phi0 = Phi.copy()
     if alpha == 1:
@@ -689,7 +692,6 @@ def SPF_V2(params):
     else :
         chi = alpha
 
-    size = len(img)/2
     x0 = y0 = len(img)/2
     slope = np.tan(PA)
     intercept = y0 - x0*slope
@@ -705,23 +707,17 @@ def SPF_V2(params):
     y_rot = np.zeros(nb_radius * len(Phi))
     sca   = np.zeros(nb_radius * len(Phi))
 
-    xc_p, yc_p = orthogonal_projection((xs, ys), (Xc, Yc), PA)    
-    # xc_p, yc_p = xs, ys
-
     idx = 0
     for R in np.linspace(R_in/pixelscale_au, R_out/pixelscale_au, nb_radius):
-        # Phi, yc_p, xc_p = Non_Centered_Star_AzimithalAngle(R, (xs, ys), (Yc, Xc), np.pi/2 -PA, Phi)
-
         x_circle = xc_p + R * np.cos(PA - Phi)
         y_circle = yc_p + R * np.sin(PA - Phi)
-
         Phi = (PA - np.arctan2(y_circle - xs, x_circle - ys)) % (2*np.pi)
         for phi in Phi :
             x     = R * np.sin(phi)
             y     = H_ref * (R/R_ref)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
-            x_rot[idx] = - x * np.sin(PA) - y * np.cos(PA) + xc_p
-            y_rot[idx] =   x * np.cos(PA) - y * np.sin(PA) + yc_p
-            sca[idx] = np.arccos(np.cos(aspect) * np.cos(phi) * np.sin(incl) + np.sin(aspect) *np.cos(incl))
+            x_rot[idx] = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
+            y_rot[idx] = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
+            sca[idx] = np.arccos(np.cos(H_ref/R_ref) * np.cos(phi) * np.sin(incl) + np.sin(H_ref/R_ref) *np.cos(incl))
             idx += 1
 
     Imgs    = [img_all, img_east, img_west]
@@ -753,19 +749,19 @@ def SPF_V2(params):
             mask      = np.where(np.logical_and(Angle >= bin_Sca[idx], Angle < bin_Sca[idx+1]))
             if len(mask[0])!=0:
                 Sca.append(np.nanmean(Angle[mask]))
-                D_Sca.append(np.nanstd(Angle[mask])/len(Angle[mask]))
+                D_Sca.append(2 * np.nanstd(Angle[mask])/np.sqrt(len(Angle[mask])))
                 SPF.append(np.nanmean(Flux[mask]))
                 SPF_coro.append(np.nanmean(Flux_Coro[mask]))
-                D_SPF.append(np.nanstd(Flux[mask])/len(Flux[mask]))
-                D_SPF_coro.append(np.nanstd(Flux_Coro[mask])/len(Flux_Coro[mask]))
+                D_SPF.append(2 * np.nanstd(Flux[mask])/np.sqrt(len(Flux[mask])))
+                D_SPF_coro.append(2 * np.nanstd(Flux_Coro[mask])/np.sqrt(len(Flux_Coro[mask])))
 
-        N = np.cos(aspect) * np.sin(chi*aspect - aspect)
-        D = np.cos(aspect) * np.sin(chi*aspect - aspect) + np.cos(incl) * np.cos(chi*aspect - aspect) - np.sin(chi*aspect) * np.cos(np.radians(Sca))
-        dN_g  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1))
-        dD_g  = - np.sin(aspect) * np.sin(chi*aspect - aspect) + np.cos(aspect) * (np.cos(chi*aspect - aspect) * (chi - 1)) + np.cos(incl) * (-np.sin(chi*aspect - aspect) * (chi-1)) - np.cos(chi*aspect) * chi * np.cos(np.radians(Sca))
+        N = np.cos(H_ref/R_ref) * np.sin(chi*H_ref/R_ref - H_ref/R_ref)
+        D = np.cos(H_ref/R_ref) * np.sin(chi*H_ref/R_ref - H_ref/R_ref) + np.cos(incl) * np.cos(chi*H_ref/R_ref - H_ref/R_ref) - np.sin(chi*H_ref/R_ref) * np.cos(np.radians(Sca))
+        dN_g  = - np.sin(H_ref/R_ref) * np.sin(chi*H_ref/R_ref - H_ref/R_ref) + np.cos(H_ref/R_ref) * (np.cos(chi*H_ref/R_ref - H_ref/R_ref) * (chi - 1))
+        dD_g  = - np.sin(H_ref/R_ref) * np.sin(chi*H_ref/R_ref - H_ref/R_ref) + np.cos(H_ref/R_ref) * (np.cos(chi*H_ref/R_ref - H_ref/R_ref) * (chi - 1)) + np.cos(incl) * (-np.sin(chi*H_ref/R_ref - H_ref/R_ref) * (chi-1)) - np.cos(chi*H_ref/R_ref) * chi * np.cos(np.radians(Sca))
         dLB_g = (D * dN_g * N * dD_g)/D**2
-        dLB_i = (-N*np.sin(incl)*np.cos(chi*aspect-aspect))/D**2
-        dLB_s = (-N*np.sin(chi*aspect)*np.sin(np.radians(Sca)))/D**2
+        dLB_i = (-N*np.sin(incl)*np.cos(chi*H_ref/R_ref-H_ref/R_ref))/D**2
+        dLB_s = (-N*np.sin(chi*H_ref/R_ref)*np.sin(np.radians(Sca)))/D**2
 
         LB_effect_tot = N/D
         D_LB_tot = np.sqrt((dLB_g * D_aspect)**2 + (dLB_i * D_incl)**2 + (dLB_s * D_Sca)**2)
@@ -777,6 +773,326 @@ def SPF_V2(params):
 
         Dataset[Side_type] = {"Sca" : Sca, "SPF" : SPF, "Err_Sca" : D_Sca, "Err_SPF" : D_SPF, "LB" : LB_effect_tot, "Err_LB" : D_LB_tot, "SPF_coro" : SPF_coro, "Err_SPF_coro" : D_SPF_coro, "EZ" : image_EZ}
     return Dataset
+
+def SPF_Extreme(params, folderpath, File_name, img_type, add=''):
+    """
+    Launch SPF computation for All side taking into account errors on geometric parameters by computing SPF for extreme parameters. Multiprocessing is applied for SPF computation for each parameter errors
+    
+    Parameters
+    ----------
+    
+    params      :   list
+                    list of parameters used for SPF extraction
+                    img (ndarray)       -   fits image
+                    distance (float)    -   target distance in parsec
+                    pixelscale (float)  -   pixelscale in arcsec/pixel
+                    (xs, ys) (float)    -   star position in pixel
+                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
+                    incl (float)        -   inclination in radian
+                    PA (float)          -   Position Angle in radian
+                    R_ref (float)       -   Reference Radius of fitted disk geometry
+                    H_ref (float)       -   Reference Height of fitted disk geometry
+                    alpha (float)       -   power law index for local scattering height computation
+                    D_incl (float)      -   Error on inclination in radian
+                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
+                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
+                    R_in, R_out (float) -   Limits of extraction zone
+                    n_bin (int)         -   number of bins for scattering angles
+                    Phi (ndarray)       -   azimuth for scanning the disk image
+                    Type (str)          -   SPF type, if its for values or for error estimations
+    
+    folderpath  :   str
+                    full path to the saving folder \DRAGyS_Results
+
+    File_name   :   str
+                    name of the fits file with extension
+    
+    img_type    :   str
+                    "Polarized" or "Total" to well save data in a appropriate filename
+    """
+    with Pool(processes=len(params)) as pool_SPF:
+        resultats = pool_SPF.map(Flux_Extraction_extreme_case, params)
+    Data_tot        = resultats[0]
+    Data_MinPA      = resultats[1]
+    Data_MaxPA      = resultats[2]
+    Data_MinIncl    = resultats[3]
+    Data_MaxIncl    = resultats[4]
+    Data_MinH       = resultats[5]
+    Data_MaxH       = resultats[6]
+    Data_MinR       = resultats[7]
+    Data_MaxR       = resultats[8]
+
+    Dataset = {}
+    Types  = ['All', "East", "West"]
+    for T in Types:
+        Scatt_tot                  = Data_tot[T]["Sca"]
+        SPF_tot, Err_SPF_tot       = Data_tot[T]['SPF'],      Data_tot[T]['Err_SPF']
+        SPF_coro, Err_SPF_coro     = Data_tot[T]['SPF_coro'], Data_tot[T]['Err_SPF_coro']
+
+        Scatt_MinPA     = Data_MinPA[T]["Sca"]
+        Scatt_MaxPA     = Data_MaxPA[T]["Sca"]
+        Scatt_MinIncl   = Data_MinIncl[T]["Sca"]
+        Scatt_MaxIncl   = Data_MaxIncl[T]["Sca"]
+        Scatt_MinH      = Data_MinH[T]["Sca"]
+        Scatt_MaxH      = Data_MaxH[T]["Sca"]
+        Scatt_MinR      = Data_MinR[T]["Sca"]
+        Scatt_MaxR      = Data_MaxR[T]["Sca"]
+
+        SPF_MinPA     = np.interp(Scatt_tot, Scatt_MinPA,   Data_MinPA[T]['SPF'])
+        SPF_MaxPA     = np.interp(Scatt_tot, Scatt_MaxPA,   Data_MaxPA[T]['SPF'])
+        SPF_MinIncl   = np.interp(Scatt_tot, Scatt_MinIncl, Data_MinIncl[T]['SPF'])
+        SPF_MaxIncl   = np.interp(Scatt_tot, Scatt_MaxIncl, Data_MaxIncl[T]['SPF'])
+        SPF_MinH      = np.interp(Scatt_tot, Scatt_MinH,    Data_MinH[T]['SPF'])
+        SPF_MaxH      = np.interp(Scatt_tot, Scatt_MaxH,    Data_MaxH[T]['SPF'])
+        SPF_MinR      = np.interp(Scatt_tot, Scatt_MinR,    Data_MinR[T]['SPF'])
+        SPF_MaxR      = np.interp(Scatt_tot, Scatt_MaxR,    Data_MaxR[T]['SPF'])
+
+        sigma_min = np.ones_like(Scatt_tot)
+        sigma_max = np.ones_like(Scatt_tot)
+        for idx in range(len(Scatt_tot)):
+            supp = np.max([SPF_MinPA[idx], SPF_MaxPA[idx], SPF_MinIncl[idx], SPF_MaxIncl[idx], SPF_MinH[idx], SPF_MaxH[idx], SPF_MinR[idx], SPF_MaxR[idx]]) - SPF_tot[idx]
+            inff = SPF_tot[idx] - np.min([SPF_MinPA[idx], SPF_MaxPA[idx], SPF_MinIncl[idx], SPF_MaxIncl[idx], SPF_MinH[idx], SPF_MaxH[idx], SPF_MinR[idx], SPF_MaxR[idx]])
+            if supp > 0:
+                sigma_max[idx] = supp
+            else:
+                sigma_max[idx] = 0
+            if inff > 0:
+                sigma_min[idx] = inff
+            else:
+                sigma_min[idx] = 0
+
+        Err_SPF_max = np.sqrt((Err_SPF_tot)**2 + sigma_max**2)
+        Err_SPF_min = np.sqrt((Err_SPF_tot)**2 + sigma_min**2)
+
+        SPF_MinPA_coro     = np.interp(Scatt_tot, Scatt_MinPA,   Data_MinPA[T]['SPF_coro'])
+        SPF_MaxPA_coro     = np.interp(Scatt_tot, Scatt_MaxPA,   Data_MaxPA[T]['SPF_coro'])
+        SPF_MinIncl_coro   = np.interp(Scatt_tot, Scatt_MinIncl, Data_MinIncl[T]['SPF_coro'])
+        SPF_MaxIncl_coro   = np.interp(Scatt_tot, Scatt_MaxIncl, Data_MaxIncl[T]['SPF_coro'])
+        SPF_MinH_coro      = np.interp(Scatt_tot, Scatt_MinH,    Data_MinH[T]['SPF_coro'])
+        SPF_MaxH_coro      = np.interp(Scatt_tot, Scatt_MaxH,    Data_MaxH[T]['SPF_coro'])
+        SPF_MinR_coro      = np.interp(Scatt_tot, Scatt_MinR,    Data_MinR[T]['SPF_coro'])
+        SPF_MaxR_coro      = np.interp(Scatt_tot, Scatt_MaxR,    Data_MaxR[T]['SPF_coro'])
+
+        sigma_min_coro = np.ones_like(Scatt_tot)
+        sigma_max_coro = np.ones_like(Scatt_tot)
+        for idx in range(len(Scatt_tot)):
+            supp_coro = np.max([SPF_MinPA_coro[idx], SPF_MaxPA_coro[idx], SPF_MinIncl_coro[idx], SPF_MaxIncl_coro[idx], SPF_MinH_coro[idx], SPF_MaxH_coro[idx], SPF_MinR_coro[idx], SPF_MaxR_coro[idx]]) - SPF_coro[idx]
+            inff_coro = SPF_coro[idx] - np.min([SPF_MinPA_coro[idx], SPF_MaxPA_coro[idx], SPF_MinIncl_coro[idx], SPF_MaxIncl_coro[idx], SPF_MinH_coro[idx], SPF_MaxH_coro[idx], SPF_MinR_coro[idx], SPF_MaxR_coro[idx]])
+            if supp_coro > 0:
+                sigma_max_coro[idx] = supp_coro
+            else:
+                sigma_max_coro[idx] = 0
+            if inff > 0:
+                sigma_min_coro[idx] = inff_coro
+            else:
+                sigma_min_coro[idx] = 0
+
+        Err_SPF_max_coro = np.sqrt((Err_SPF_coro)**2 + sigma_max_coro**2)
+        Err_SPF_min_coro = np.sqrt((Err_SPF_coro)**2 + sigma_min_coro**2)
+        
+        Dataset[T] = {'Sca': Scatt_tot, 
+                      'SPF' : SPF_tot, 'Err_Sca' : Data_tot[T]['Err_Sca'], 'Err_SPF'      : [Err_SPF_min,      Err_SPF_max     ], 
+                      'SPF_coro' : SPF_coro                                   , 'Err_SPF_coro' : [Err_SPF_min_coro, Err_SPF_max_coro], 
+                      'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], 
+                      "Params" : params[0],
+                      "EZ" : Data_tot[T]["EZ"],
+                      }
+    filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}{add}.{(img_type[0]).lower()}spf"
+    with open(filename, 'wb') as Data_PhF:
+        pkl.dump(Dataset, Data_PhF)
+
+# New Version of SPF Extraction, Using N=100 Random set of geometric parameters (normal law) to compute SPF and Errorbar as mean values and standard error for each scattering angle bins
+def Flux_Extraction(params):
+    """
+    Compute raw SPF using geometrical parameters, extraction zone and limb brightening effet
+
+    Parameters
+    ----------
+
+    params      :   list
+                    list of parameters used for SPF extraction
+                    img (ndarray)       -   fits image
+                    distance (float)    -   target distance in parsec
+                    pixelscale (float)  -   pixelscale in arcsec/pixel
+                    (xs, ys) (float)    -   star position in pixel
+                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
+                    incl (float)        -   inclination in radian
+                    PA (float)          -   Position Angle in radian
+                    R_ref (float)       -   Reference Radius of fitted disk geometry
+                    H_ref (float)       -   Reference Height of fitted disk geometry
+                    aspect (float)      -   H_ref/R_ref
+                    alpha (float)       -   power law index for local scattering height computation
+                    D_incl (float)      -   Error on inclination in radian
+                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
+                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
+                    D_aspect (float)    -   Error on H_ref/R_ref
+                    R_in, R_out (float) -   Limits of extraction zone
+                    n_bin (int)         -   number of bins for scattering angles
+                    Phi (ndarray)       -   azimuth for scanning the disk image
+                    Type (str)          -   SPF type, if its for values or for error estimations
+    
+    Returns
+    -------
+
+    Dictionnary
+                    Data set of SPF for All the disk, and for each side : Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
+                    behind each keys []"All", "East", "West"] : 
+                    {"Sca"          : Scatt, 
+                     "SPF"          : SPF, 
+                     "Err_Sca"      : D_Scatt, 
+                     "Err_SPF"      : D_SPF, 
+                     "LB"           : LB_effect_tot, 
+                     "Err_LB"       : D_LB_tot}
+
+    """
+    [img, distance, pixelscale, r_beam, (xs, ys), (xc_p, yc_p), incl, PA, R_ref, H_ref, chi, R_in, R_out, n_bin, Phi, Corono_mask] = params    
+    pixelscale_au = 648000/np.pi * distance * np.tan(np.radians(pixelscale/3600))
+    nb_radius = round((R_out - R_in)/pixelscale_au) + 5 
+    Phi = np.radians(Phi)
+
+    x0 = y0 = len(img)/2
+    slope = np.tan(PA)
+    intercept = y0 - x0*slope
+    mask_idx = np.indices((len(img), len(img)))
+    mask = mask_idx[0] > slope * mask_idx[1] + intercept
+
+    x_rot = np.zeros(nb_radius * len(Phi))
+    y_rot = np.zeros(nb_radius * len(Phi))
+    sca   = np.zeros(nb_radius * len(Phi))
+
+    idx = 0
+    for R in np.linspace(R_in/pixelscale_au, R_out/pixelscale_au, nb_radius):
+        x_circle = xc_p + R * np.cos(PA - Phi)
+        y_circle = yc_p + R * np.sin(PA - Phi)
+        Phi = (PA - np.arctan2(y_circle - xs, x_circle - ys)) % (2*np.pi)
+        for phi in Phi :
+            x     = R * np.sin(phi)
+            y     = H_ref * (R/R_ref)**chi * np.sin(incl) - R * np.cos(phi) * np.cos(incl)
+            x_rot[idx] = x * np.cos(np.pi - PA) - y * np.sin(np.pi - PA) + xc_p
+            y_rot[idx] = x * np.sin(np.pi - PA) + y * np.cos(np.pi - PA) + yc_p
+            sca[idx] = np.arccos(np.cos(H_ref/R_ref) * np.cos(phi) * np.sin(incl) + np.sin(H_ref/R_ref) *np.cos(incl))
+            idx += 1
+
+    img_all  = img.copy()
+    img_east = img.copy()
+    img_west = img.copy()
+    img_east[~mask] = np.nan
+    img_west[mask] = np.nan
+
+    Imgs    = [img_all, img_east, img_west]    
+    Dataset = {}
+    
+    for idx, Side_type in enumerate(['All', 'East', 'West']):
+        image = Imgs[idx]
+        Angle, Flux = [], []
+        already_used_pixels = []
+        for jdx in range(len(x_rot)):
+            if (round(x_rot[jdx]), round(y_rot[jdx])) not in already_used_pixels:
+                Flux.append(image[round(x_rot[jdx]), round(y_rot[jdx])])
+                Angle.append(np.degrees(sca[jdx]))
+                already_used_pixels.append((round(x_rot[jdx]), round(y_rot[jdx])))
+        Angle, Flux = np.array(Angle), np.array(Flux)
+        Dataset[Side_type] = [Angle, Flux]
+    return Dataset
+
+def SPF_Random(params, folderpath, File_name, img_type, add=''):
+    # [self.img_chose, distance, pixelscale, r_beam, (xs, ys), (xc_P, yc_P), self.incl, self.PA, self.r_ref, self.h_ref, self.alpha, (D_xc_P, D_yc_P), self.D_incl, self.D_PA, self.D_r_ref, self.D_h_ref, R_in, R_out, n_bin, self.AzimuthalAngle, Corono_mask]
+    [img,            distance, pixelscale, r_beam, (xs, ys), (xc_p, yc_p), incl,      PA,      R_ref,      H_ref,      chi,        (D_xc_p, D_yc_p), D_incl,      D_PA,      D_R_ref,      D_H_ref,      R_in, R_out, n_bin, Phi, Correct_corona] = params    
+    
+    conf = 1
+    n_steps = 100
+
+    D_aspect = np.sqrt((D_H_ref/H_ref)**2 + (D_R_ref/R_ref)**2)
+    bin_Sca = np.linspace(0, 180, n_bin+1)
+
+    x_center      = np.random.normal(xc_p,  conf*D_xc_p,  n_steps)
+    y_center      = np.random.normal(yc_p,  conf*D_yc_p,  n_steps)
+    inclination   = np.random.normal(incl,  conf*D_incl,  n_steps)
+    positionangle = np.random.normal(PA,    conf*D_PA,    n_steps)
+    height        = np.random.normal(H_ref, conf*D_H_ref, n_steps)
+    radius        = np.random.normal(R_ref, conf*D_R_ref, n_steps)
+
+    Pool_params = []
+    for step in range(n_steps):
+        Pool_params.append([img, distance, pixelscale, r_beam, (xs, ys), (x_center[step], y_center[step]), inclination[step], positionangle[step], radius[step], height[step], chi, R_in, R_out, n_bin, Phi, Correct_corona])
+    
+    with Pool(processes=n_steps) as pool_SPF:
+        results = pool_SPF.map(Flux_Extraction, Pool_params)
+
+    Dataset = {}
+    for idx, Side_type in enumerate(['All', 'East', 'West']):
+        All_Sca = []
+        All_SPF = []
+        for step in range(n_steps):
+            All_Sca.append(results[step][Side_type][0])
+            All_SPF.append(results[step][Side_type][1])
+
+        A_Sca   = []
+        D_A_Sca   = []
+        A_SPF   = []
+        D_A_SPF = []
+        for adx in range(len(All_Sca)):     
+
+            b_Sca   = np.zeros(n_bin)
+            D_b_Sca = np.zeros(n_bin)
+
+            b_SPF   = np.zeros(n_bin)
+            D_b_SPF = np.zeros(n_bin)
+
+            Angle = All_Sca[adx]
+            Flux  = All_SPF[adx]
+            for idx in range(n_bin):
+                mask = np.where(np.logical_and(Angle >= bin_Sca[idx], Angle < bin_Sca[idx+1]))
+                if len(mask) == 0:
+                    b_Sca[idx]   = np.nan()
+                    b_SPF[idx]   = np.nan()
+                    D_b_Sca[idx] = np.nan()
+                    D_b_SPF[idx] = np.nan()
+                else :
+                    b_Sca[idx]   = (bin_Sca[idx] + bin_Sca[idx+1])/2
+                    D_b_Sca[idx] = np.abs(bin_Sca[idx] - bin_Sca[idx+1])/2
+                    b_SPF[idx]   = np.nanmean(Flux[mask])
+                    D_b_SPF[idx] = np.nanstd(Flux[mask])/np.sqrt(len(Flux[mask]))
+            A_Sca.append(b_Sca)
+            D_A_Sca.append(D_b_Sca)
+            A_SPF.append(b_SPF)
+            D_A_SPF.append(D_b_SPF)
+
+        Sca   = np.nanmean(A_Sca, axis=0)
+        D_Sca = np.nanmean(D_A_Sca, axis=0)
+        SPF   = np.nanmean(A_SPF, axis=0)
+        # D_SPF = np.sqrt(np.nanstd(A_SPF, axis=0)**2 + np.nanmean(D_A_SPF, axis=0)**2)
+        D_SPF = np.nanstd(A_SPF, axis=0)
+
+        notnan = np.isnan(SPF)
+        Sca    = Sca[~notnan]
+        D_Sca  = D_Sca[~notnan]
+        SPF    = SPF[~notnan]
+        D_SPF  = D_SPF[~notnan]
+
+
+        vars       = [  H_ref,   R_ref,   incl]
+        sigma_vars = [D_H_ref, D_R_ref, D_incl]
+
+        # --- LB Compute et Uncertainties ---
+        LB       = compute_LB(*vars, chi, Sca)
+        partials = [partial_derivative(compute_LB, i, vars, args=(chi, Sca)) for i in range(3)]
+        sigma_LB = np.sqrt(sum((partials[i] * sigma_vars[i])**2 for i in range(3)))
+
+        Sca,           D_Sca      = np.array(Sca),           np.abs(np.array(D_Sca))
+        SPF,           D_SPF      = np.array(SPF),           np.abs(np.array(D_SPF))
+
+        Dataset[Side_type] = {"Sca" : Sca, "SPF" : SPF, "Err_Sca" : D_Sca, "Err_SPF" : D_SPF, "LB" : LB, "Err_LB" : sigma_LB, "All_Sca" : All_Sca, "All_SPF" : All_SPF, "Params" : params}
+    
+    if Correct_corona:
+        filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}{add}_CoronaCorrected.{(img_type[0]).lower()}spf"
+    else:
+        filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}{add}.{(img_type[0]).lower()}spf"
+
+    with open(filename, 'wb') as Data_PhF:
+        pkl.dump(Dataset, Data_PhF)
+
+    # return Dataset
 
 def New_Beam_pSPF(params):
     """
@@ -954,112 +1270,6 @@ def New_Beam_pSPF(params):
     West_side         = {"Scatt" : Scatt_west, "I" : I_west,         "PI" : PI_west,   "Err_Scatt" : D_Scatt_west, "Err_I" : D_I_west,         "Err_PI" : D_PI_west, "LB" : LB_effect_west, "Err_LB" : D_LB_west}
     Dataset = {'All' : All_disk, "East" : East_side, "West" : West_side}
     return Dataset
-
-def Compute_SPF(params, folderpath, File_name, img_type):
-    """
-    Launch SPF computation for All side taking into account errors on geometric parameters. Multiprocessing is applied for SPF computation for each parameter errors
-    
-    Parameters
-    ----------
-    
-    params      :   list
-                    list of parameters used for SPF extraction
-                    img (ndarray)       -   fits image
-                    distance (float)    -   target distance in parsec
-                    pixelscale (float)  -   pixelscale in arcsec/pixel
-                    (xs, ys) (float)    -   star position in pixel
-                    (Xc, Yc) (float)    -   fitted ellispe position in pixel
-                    incl (float)        -   inclination in radian
-                    PA (float)          -   Position Angle in radian
-                    R_ref (float)       -   Reference Radius of fitted disk geometry
-                    H_ref (float)       -   Reference Height of fitted disk geometry
-                    aspect (float)      -   H_ref/R_ref
-                    alpha (float)       -   power law index for local scattering height computation
-                    D_incl (float)      -   Error on inclination in radian
-                    D_R_ref (float)     -   Error on Reference Radius of fitted disk geometry
-                    D_H_ref (float)     -   Error on Reference Height of fitted disk geometry
-                    D_aspect (float)    -   Error on H_ref/R_ref
-                    R_in, R_out (float) -   Limits of extraction zone
-                    n_bin (int)         -   number of bins for scattering angles
-                    Phi (ndarray)       -   azimuth for scanning the disk image
-                    Type (str)          -   SPF type, if its for values or for error estimations
-    
-    folderpath  :   str
-                    full path to the saving folder \DRAGyS_Results
-
-    File_name   :   str
-                    name of the fits file with extension
-    
-    img_type    :   str
-                    "Polarized" or "Total" to well save data in a appropriate filename
-    """
-    with Pool(processes=7) as pool_SPF:
-        resultats = pool_SPF.map(SPF_V2, params)
-    Data_tot        = resultats[0]
-    Data_MinPA      = resultats[1]
-    Data_MaxPA      = resultats[2]
-    Data_MinIncl    = resultats[3]
-    Data_MaxIncl    = resultats[4]
-    Data_MinAspect  = resultats[5]
-    Data_MaxAspect  = resultats[6]
-
-    Dataset = {}
-    Types  = ['All', "East", "West"]
-    for T in Types:
-        Scatt_tot                  = Data_tot[T]["Sca"]
-        SPF_tot, Err_SPF_tot       = Data_tot[T]['SPF'], Data_tot[T]['Err_SPF']
-        SPF_coro, Err_SPF_coro       = Data_tot[T]['SPF_coro'], Data_tot[T]['Err_SPF_coro']
-
-        Scatt_MinPA     = Data_MinPA[T]["Sca"]
-        Scatt_MaxPA     = Data_MaxPA[T]["Sca"]
-        Scatt_MinIncl   = Data_MinIncl[T]["Sca"]
-        Scatt_MaxIncl   = Data_MaxIncl[T]["Sca"]
-        Scatt_MinAspect = Data_MinAspect[T]["Sca"]
-        Scatt_MaxAspect = Data_MaxAspect[T]["Sca"]
-
-        SPF_MinPA     = Data_MinPA[T]['SPF']
-        SPF_MaxPA     = Data_MaxPA[T]['SPF']
-        SPF_MinIncl   = Data_MinIncl[T]['SPF']
-        SPF_MaxIncl   = Data_MaxIncl[T]['SPF']
-        SPF_MinAspect = Data_MinAspect[T]['SPF']
-        SPF_MaxAspect = Data_MaxAspect[T]['SPF']
-
-        SPF_MinPA_coro     = Data_MinPA[T]['SPF_coro']
-        SPF_MaxPA_coro     = Data_MaxPA[T]['SPF_coro']
-        SPF_MinIncl_coro   = Data_MinIncl[T]['SPF_coro']
-        SPF_MaxIncl_coro   = Data_MaxIncl[T]['SPF_coro']
-        SPF_MinAspect_coro = Data_MinAspect[T]['SPF_coro']
-        SPF_MaxAspect_coro = Data_MaxAspect[T]['SPF_coro']
-
-        delta_SPF_MinPA     = np.where((Scatt_tot >= np.min(Scatt_MinPA))     & (Scatt_tot <= np.max(Scatt_MinPA)),     SPF_tot - np.interp(Scatt_tot,   Scatt_MinPA,      SPF_MinPA    ), 0)
-        delta_SPF_MaxPA     = np.where((Scatt_tot >= np.min(Scatt_MaxPA))     & (Scatt_tot <= np.max(Scatt_MaxPA)),     SPF_tot - np.interp(Scatt_tot,   Scatt_MaxPA,      SPF_MaxPA    ), 0)
-        delta_SPF_MinIncl   = np.where((Scatt_tot >= np.min(Scatt_MinIncl))   & (Scatt_tot <= np.max(Scatt_MinIncl)),   SPF_tot - np.interp(Scatt_tot,   Scatt_MinIncl,    SPF_MinIncl  ), 0)
-        delta_SPF_MaxIncl   = np.where((Scatt_tot >= np.min(Scatt_MaxIncl))   & (Scatt_tot <= np.max(Scatt_MaxIncl)),   SPF_tot - np.interp(Scatt_tot,   Scatt_MaxIncl,    SPF_MaxIncl  ), 0)
-        delta_SPF_MinAspect = np.where((Scatt_tot >= np.min(Scatt_MinAspect)) & (Scatt_tot <= np.max(Scatt_MinAspect)), SPF_tot - np.interp(Scatt_tot,   Scatt_MinAspect,  SPF_MinAspect), 0)
-        delta_SPF_MaxAspect = np.where((Scatt_tot >= np.min(Scatt_MaxAspect)) & (Scatt_tot <= np.max(Scatt_MaxAspect)), SPF_tot - np.interp(Scatt_tot,   Scatt_MaxAspect,  SPF_MaxAspect), 0)
-
-        delta_SPF_MinPA_coro     = np.where((Scatt_tot >= np.min(Scatt_MinPA))     & (Scatt_tot <= np.max(Scatt_MinPA)),     SPF_coro - np.interp(Scatt_tot,   Scatt_MinPA,      SPF_MinPA_coro    ), 0)
-        delta_SPF_MaxPA_coro     = np.where((Scatt_tot >= np.min(Scatt_MaxPA))     & (Scatt_tot <= np.max(Scatt_MaxPA)),     SPF_coro - np.interp(Scatt_tot,   Scatt_MaxPA,      SPF_MaxPA_coro    ), 0)
-        delta_SPF_MinIncl_coro   = np.where((Scatt_tot >= np.min(Scatt_MinIncl))   & (Scatt_tot <= np.max(Scatt_MinIncl)),   SPF_coro - np.interp(Scatt_tot,   Scatt_MinIncl,    SPF_MinIncl_coro  ), 0)
-        delta_SPF_MaxIncl_coro   = np.where((Scatt_tot >= np.min(Scatt_MaxIncl))   & (Scatt_tot <= np.max(Scatt_MaxIncl)),   SPF_coro - np.interp(Scatt_tot,   Scatt_MaxIncl,    SPF_MaxIncl_coro  ), 0)
-        delta_SPF_MinAspect_coro = np.where((Scatt_tot >= np.min(Scatt_MinAspect)) & (Scatt_tot <= np.max(Scatt_MinAspect)), SPF_coro - np.interp(Scatt_tot,   Scatt_MinAspect,  SPF_MinAspect_coro), 0)
-        delta_SPF_MaxAspect_coro = np.where((Scatt_tot >= np.min(Scatt_MaxAspect)) & (Scatt_tot <= np.max(Scatt_MaxAspect)), SPF_coro - np.interp(Scatt_tot,   Scatt_MaxAspect,  SPF_MaxAspect_coro), 0)
-
-        Err_PI_min = np.sqrt((Err_SPF_tot)**2 + np.array(delta_SPF_MinPA)**2 + np.array(delta_SPF_MinIncl)**2 + np.array(delta_SPF_MinAspect)**2)
-        Err_PI_max = np.sqrt((Err_SPF_tot)**2 + np.array(delta_SPF_MaxPA)**2 + np.array(delta_SPF_MaxIncl)**2 + np.array(delta_SPF_MaxAspect)**2)
-        
-        Err_PI_min_coro = np.sqrt((Err_SPF_coro)**2 + np.array(delta_SPF_MinPA_coro)**2 + np.array(delta_SPF_MinIncl_coro)**2 + np.array(delta_SPF_MinAspect_coro)**2)
-        Err_PI_max_coro = np.sqrt((Err_SPF_coro)**2 + np.array(delta_SPF_MaxPA_coro)**2 + np.array(delta_SPF_MaxIncl_coro)**2 + np.array(delta_SPF_MaxAspect_coro)**2)
-        Dataset[T] = {'Sca': Scatt_tot, 
-                      'SPF'      : SPF_tot, 'Err_Sca' : Data_tot[T]['Err_Sca'], 'Err_SPF'      : [Err_PI_min,      Err_PI_max     ], 
-                      'SPF_coro' : SPF_coro                                   , 'Err_SPF_coro' : [Err_PI_min_coro, Err_PI_max_coro], 
-                      'LB' : Data_tot[T]['LB'], 'Err_LB' : Data_tot[T]['Err_LB'], 
-                      "Params" : params[0],
-                      "EZ" : Data_tot[T]["EZ"],
-                      }
-    filename = f"{folderpath}/DRAGyS_Results/{File_name[:-5]}_DMparams.{(img_type[0]).lower()}spf"
-    with open(filename, 'wb') as Data_PhF:
-        pkl.dump(Dataset, Data_PhF)
 
 def colorline_with_error(x, y, cmap='viridis', alpha=1.0, linestyle='-', linewidth=2, label=None):
     """Plot a colored curve"""
@@ -1354,19 +1564,33 @@ def Get_PhF(filename, side='All', LBCorrected=False, norm='none'):
 def Get_SPF(filename, side='All', LBCorrected=False, norm='none', coronagraph_transmission=False):          # Not Used Yet
     with open(filename, 'rb') as fichier:
         Loaded_Data = pkl.load(fichier)
+
     Scatt     = np.array(Loaded_Data[side]["Sca"])
-    SPF       = np.array(Loaded_Data[side]["SPF"])
     Err_Scatt = np.array(Loaded_Data[side]["Err_Sca"])
-    Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
-    LB        = np.array(Loaded_Data[side]["LB"])
-    Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
     if coronagraph_transmission == True:
         SPF       = np.array(Loaded_Data[side]["SPF_coro"])
         Err_SPF   = np.array(Loaded_Data[side]["Err_SPF_coro"])
+    else:
+        SPF       = np.array(Loaded_Data[side]["SPF"])
+        Err_SPF   = np.array(Loaded_Data[side]["Err_SPF"])
+    LB        = np.array(Loaded_Data[side]["LB"])
+    Err_LB    = np.array(Loaded_Data[side]["Err_LB"])
+
     if LBCorrected:
+        Err_SPF = SPF/LB * np.sqrt((Err_SPF/SPF)**2 + (Err_LB/LB)**2)
         SPF  = SPF/LB
-        Err_SPF = SPF * np.sqrt((Err_SPF/SPF)**2 + (Err_LB/LB)**2)
-    Norm = np.interp(90, Scatt, SPF) if norm=='90' else 1
+
+    if norm == 'max':
+        Norm = np.max(SPF)
+    elif norm == 'first':
+        Norm = SPF[0]
+    elif norm == '90':
+        Norm = np.interp(90, Scatt, SPF)
+    elif norm == 'mean90':
+        Norm = np.mean(np.interp(np.linspace(80, 100, 20), Scatt, SPF))
+    else :
+        Norm = 1
+
     return Scatt, SPF/Norm, LB, Err_Scatt, Err_SPF/Norm, Err_LB
 
 def MCFOST_PhaseFunction(file_path, Normalization):
@@ -1473,8 +1697,24 @@ def LimbBrightening(Scatt, incl, aspect, chi):
     """
     return (np.cos(aspect) * np.sin(aspect*chi-aspect)) / (np.cos(aspect)*np.sin(aspect*chi-aspect) + np.cos(incl)*np.cos(aspect*chi-aspect) - np.sin(aspect*chi)*np.cos(np.radians(Scatt)))
 
-# =======================================================================================
+def compute_LB(H_ref, R_ref, incl, chi, Sca):
+    x = H_ref / R_ref
+    theta = (chi - 1) * x
+    Sca_rad = np.radians(Sca)
 
+    num   = np.cos(x) * np.sin(theta)
+    denom = np.cos(x) * np.sin(theta) + np.cos(incl) * np.cos(theta) - np.sin(chi * x) * np.cos(Sca_rad)
+
+    return num / denom
+
+def partial_derivative(func, var_idx, vars, args=(), h=1e-5):
+    vars_forward = vars[:]
+    vars_backward = vars[:]
+    vars_forward[var_idx] += h
+    vars_backward[var_idx] -= h
+    return (func(*vars_forward, *args) - func(*vars_backward, *args)) / (2 * h)
+
+# =======================================================================================
 # ==================================     Images      ====================================
 # =======================================================================================
 
@@ -1520,8 +1760,17 @@ def Images_Opener(filepath):
     elif nb_dim == 5:  # if it is an MCFOST Simulated Image, dimension is [8, 1, 1, dim, dim]
         # threshold = 0.00000
         Image_0 = np.abs(img[0, 0, 0])
-        Image_1 = np.abs(img[1, 0, 0])
-        Image_2 = np.abs(img[2, 0, 0])
+
+        Q = img[1, 0, 0]
+        U = img[2, 0, 0]
+        center = len(Q)/2
+        X = np.arange(1, len(Q) + 1) - center
+        Y = np.arange(1, len(Q) + 1) - center
+        X, Y = np.meshgrid(X, Y)
+        Phi = np.arctan2(Y, X)
+
+        Image_1 = np.abs(- Q*np.cos(2*Phi) - U*np.sin(2*Phi))   # Q_phi
+        Image_2 = np.abs(  Q*np.sin(2*Phi) - U*np.cos(2*Phi))   # U_phi
         Image_3 = np.abs(img[3, 0, 0])
         Image_4 = np.abs(np.sqrt(Image_1**2 + Image_2**2))
         Image_5 = np.zeros_like(Image_0) + 1
@@ -1639,7 +1888,7 @@ def EZ_Radius(Path):
     """
     Radius = {}
 
-    Radius["MCFOST"]     = [80, 100]
+    Radius["MCFOST"]     = [70, 80]
 
     Radius["HD34282"]    = [190, 220]
     Radius["HD163296"]   = [55, 75]
@@ -1703,3 +1952,6 @@ def Correct_Corono_Transmission(img, band, pixelscale, output='img'):
         return img/mask
     else :
         return mask
+
+def pix2au(value, distance, pix2arcsec):
+    return value * 648000/np.pi * distance * np.tan(np.radians(pix2arcsec/3600)) 
